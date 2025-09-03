@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Indoor Tracking POI</title>
+<style>
+  body { font-family: sans-serif; margin: 0; }
+  #controls { padding: 10px; background: #f0f0f0; }
+  #canvasContainer { position: relative; }
+  canvas { border: 1px solid #ccc; display: block; margin: 10px auto; }
+  .highlight { animation: blink 0.6s infinite alternate; }
+  @keyframes blink { 0% { opacity: 1; } 100% { opacity: 0.2; } }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <label>도면 이미지 업로드:
+    <input type="file" id="floorplanUpload" accept="image/*">
+  </label>
+  <label>위치 데이터 불러오기:
+    <input type="file" id="importData" accept="application/json">
+  </label>
+  <button id="saveData">위치 데이터 저장</button>
+  <button id="downloadImage">도면 이미지 저장</button>
+  <br><br>
+  <button id="addNodeMode">노드 추가 모드</button>
+  <button id="deleteNodeMode">노드 삭제 모드</button>
+  <button id="addEdgeMode">엣지 연결 모드</button>
+  <button id="normalMode">일반 모드</button>
+  <br><br>
+  <label>출발지:
+    <select id="startNode"></select>
+  </label>
+  <label>도착지:
+    <select id="endNode"></select>
+  </label>
+  <button id="findPath">경로 찾기</button>
+  <button id="clearPath">경로 초기화</button>
+  <br><br>
+  <input type="text" id="searchNode" placeholder="노드 이름 검색">
+  <button id="searchBtn">검색</button>
+</div>
+
+<div id="canvasContainer">
+  <canvas id="floorCanvas"></canvas>
+</div>
+
+<script>
+const canvas = document.getElementById('floorCanvas');
+const ctx = canvas.getContext('2d');
+let floorImg = null;
+let floorImgDataURL = '';
+let nodes = [];
+let edges = [];
+let nodeNames = {};
+let currentMode = 'normal';
+let selectedNode = null;
+let pathNodes = [];
+let highlightNodeId = null;
+
+const floorUpload = document.getElementById('floorplanUpload');
+const importData = document.getElementById('importData');
+const saveData = document.getElementById('saveData');
+const downloadImage = document.getElementById('downloadImage');
+const addNodeModeBtn = document.getElementById('addNodeMode');
+const deleteNodeModeBtn = document.getElementById('deleteNodeMode');
+const addEdgeModeBtn = document.getElementById('addEdgeMode');
+const normalModeBtn = document.getElementById('normalMode');
+const startNodeSelect = document.getElementById('startNode');
+const endNodeSelect = document.getElementById('endNode');
+const findPathBtn = document.getElementById('findPath');
+const clearPathBtn = document.getElementById('clearPath');
+const searchNodeInput = document.getElementById('searchNode');
+const searchBtn = document.getElementById('searchBtn');
+
+// Canvas 초기 크기
+function resizeCanvas() {
+  if (floorImg) {
+    canvas.width = floorImg.width;
+    canvas.height = floorImg.height;
+    draw();
+  }
+}
+
+// 이미지 업로드
+floorUpload.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = event => {
+    const img = new Image();
+    img.onload = () => {
+      floorImg = img;
+      floorImgDataURL = event.target.result;
+      resizeCanvas();
+    };
+    img.src = event.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+// 위치 데이터 불러오기 (수동)
+importData.addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = event => {
+    const data = JSON.parse(event.target.result);
+    nodes = data.nodes || [];
+    edges = data.edges || [];
+    nodeNames = data.nodeNames || {};
+    updateStartEndOptions();
+    draw();
+  };
+  reader.readAsText(file);
+});
+
+// 위치 데이터 저장
+saveData.addEventListener('click', () => {
+  const dataStr = JSON.stringify({nodes, edges, nodeNames}, null, 2);
+  const blob = new Blob([dataStr], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'locations.json';
+  a.click();
+});
+
+// 도면 이미지 저장
+downloadImage.addEventListener('click', () => {
+  if (!floorImgDataURL) return alert('이미지가 없습니다.');
+  const a = document.createElement('a');
+  a.href = floorImgDataURL;
+  a.download = 'floorplan.png';
+  a.click();
+});
+
+// 모드 변경
+addNodeModeBtn.addEventListener('click', () => currentMode = 'addNode');
+deleteNodeModeBtn.addEventListener('click', () => currentMode = 'deleteNode');
+addEdgeModeBtn.addEventListener('click', () => { currentMode = 'addEdge'; selectedNode = null; });
+normalModeBtn.addEventListener('click', () => currentMode = 'normal');
+
+// 경로 찾기
+findPathBtn.addEventListener('click', () => {
+  const start = startNodeSelect.value;
+  const end = endNodeSelect.value;
+  if (!start || !end) return alert('출발지와 도착지를 선택하세요.');
+  pathNodes = findShortestPath(start, end);
+  draw();
+});
+
+// 경로 초기화
+clearPathBtn.addEventListener('click', () => {
+  pathNodes = [];
+  draw();
+});
+
+// 노드 검색
+searchBtn.addEventListener('click', () => {
+  const searchName = searchNodeInput.value.trim();
+  if (!searchName) return;
+  const id = Object.keys(nodeNames).find(key => nodeNames[key] === searchName);
+  if (id) {
+    highlightNodeId = id;
+    draw();
+    setTimeout(() => { highlightNodeId = null; draw(); }, 3000);
+  } else {
+    alert('해당 이름의 노드를 찾을 수 없습니다.');
+  }
+});
+
+// Canvas 클릭
+canvas.addEventListener('click', e => {
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  if (currentMode === 'addNode') {
+    const id = 'node' + (nodes.length + 1);
+    const name = prompt('노드 이름 입력:', id);
+    if (!name) return;
+    nodes.push({id, x, y});
+    nodeNames[id] = name;
+    updateStartEndOptions();
+  } else if (currentMode === 'deleteNode') {
+    const node = findNode(x, y);
+    if (node) {
+      nodes = nodes.filter(n => n.id !== node.id);
+      edges = edges.filter(e => e.from !== node.id && e.to !== node.id);
+      delete nodeNames[node.id];
+      updateStartEndOptions();
+    }
+  } else if (currentMode === 'addEdge') {
+    const node = findNode(x, y);
+    if (node) {
+      if (!selectedNode) {
+        selectedNode = node;
+      } else if (selectedNode.id !== node.id) {
+        edges.push({from: selectedNode.id, to: node.id});
+        selectedNode = null;
+      }
+    }
+  }
+  draw();
+});
+
+function findNode(x, y) {
+  return nodes.find(n => Math.hypot(n.x - x, n.y - y) < 10);
+}
+
+function updateStartEndOptions() {
+  startNodeSelect.innerHTML = '';
+  endNodeSelect.innerHTML = '';
+  for (const id in nodeNames) {
+    const opt1 = document.createElement('option');
+    opt1.value = id; opt1.textContent = nodeNames[id];
+    startNodeSelect.appendChild(opt1);
+    const opt2 = document.createElement('option');
+    opt2.value = id; opt2.textContent = nodeNames[id];
+    endNodeSelect.appendChild(opt2);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (floorImg) ctx.drawImage(floorImg, 0, 0);
+  edges.forEach(e => {
+    const from = nodes.find(n => n.id === e.from);
+    const to = nodes.find(n => n.id === e.to);
+    if (from && to) {
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.strokeStyle = '#999';
+      ctx.stroke();
+    }
+  });
+  nodes.forEach(n => {
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, 10, 0, Math.PI * 2);
+    ctx.fillStyle = (highlightNodeId === n.id) ? 'yellow' : '#3498db';
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#000';
+    ctx.fillText(nodeNames[n.id] || n.id, n.x + 12, n.y + 4);
+  });
+  if (pathNodes.length > 0) {
+    ctx.beginPath();
+    for (let i = 0; i < pathNodes.length - 1; i++) {
+      const from = nodes.find(n => n.id === pathNodes[i]);
+      const to = nodes.find(n => n.id === pathNodes[i + 1]);
+      if (from && to) {
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+      }
+    }
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+}
+
+function findShortestPath(startId, endId) {
+  const graph = {};
+  nodes.forEach(n => graph[n.id] = []);
+  edges.forEach(e => {
+    graph[e.from].push(e.to);
+    graph[e.to].push(e.from);
+  });
+  const queue = [[startId]];
+  const visited = new Set();
+  while (queue.length > 0) {
+    const path = queue.shift();
+    const node = path[path.length - 1];
+    if (node === endId) return path;
+    if (!visited.has(node)) {
+      visited.add(node);
+      graph[node].forEach(n => {
+        const newPath = [...path, n];
+        queue.push(newPath);
+      });
+    }
+  }
+  return [];
+}
+
+// ✅ 자동 로드 (GitHub Pages용)
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // floorplan.png 자동 로드
+    const img = new Image();
+    img.src = 'floorplan.png';
+    img.onload = () => {
+      floorImg = img;
+      floorImgDataURL = img.src;
+      resizeCanvas();
+    };
+
+    // locations.json 자동 로드
+    const response = await fetch('locations.json');
+    if(response.ok){
+      const data = await response.json();
+      if(data.nodes && data.edges && data.nodeNames){
+        nodes = data.nodes;
+        edges = data.edges;
+        nodeNames = data.nodeNames;
+        updateStartEndOptions();
+        draw();
+        console.log('locations.json 로드 완료');
+      }
+    }
+  } catch (err) {
+    console.error('자동 로드 실패:', err);
+  }
+});
+</script>
+
+</body>
+</html>
