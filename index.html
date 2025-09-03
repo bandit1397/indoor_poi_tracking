@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>🏬 다층 백화점 길안내 (층간 이동 자동 연결)</title>
+<title>🏬 다층 백화점 길안내 (층간 이동 자동 연결) - Admin Download</title>
 <style>
   body { margin:0; overflow:hidden; font-family:sans-serif; }
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
@@ -24,6 +24,14 @@
   }
   #nodeDialog h3 { margin:0 0 8px 0; font-size:16px; }
   #nodeDialog .typeBtn { margin:2px; padding:3px 6px; cursor:pointer; }
+  #searchResults {
+    position:absolute; background:#fff; border:1px solid #ccc;
+    display:none; z-index:10; max-height:200px; overflow-y:auto;
+  }
+  #searchResults div:hover { background:#eef; }
+  /* 관리자 버튼 작게 그룹화 */
+  #adminControls { margin-top:6px; border-top:1px dashed #ddd; padding-top:6px; }
+  #adminControls button { font-size:12px; }
 </style>
 </head>
 <body>
@@ -38,10 +46,20 @@
     <button onclick="findPath()">길찾기</button>
     <button onclick="resetAll()">초기화</button>
   </div>
-  <div>
-    위치 검색: <input type="text" id="searchInput">
-    <button onclick="highlightNode()">검색</button>
+  <div style="position:relative;">
+    위치 검색: <input type="text" id="searchInput" autocomplete="off">
+    <button onclick="manualSearch()">검색</button>
     <button id="addNodeBtn">노드추가</button>
+    <div id="searchResults"></div>
+  </div>
+
+  <!-- 관리자용 다운로드 버튼 (비밀번호 보호) -->
+  <div id="adminControls">
+    <strong>관리자</strong>:
+    <button onclick="adminDownloadFloorplan()">floorplan.png 다운로드</button>
+    <button onclick="adminDownloadLocations()">locations.json 다운로드</button>
+    <button onclick="adminUploadLocations()">locations.json 불러오기</button>
+    <input type="file" id="locationsImportInput" accept="application/json" style="display:none">
   </div>
 </div>
 
@@ -84,8 +102,11 @@ const infoBox = document.getElementById('infoBox');
 const startSel = document.getElementById('start');
 const endSel = document.getElementById('end');
 const addNodeBtn = document.getElementById('addNodeBtn');
+const searchResults = document.getElementById('searchResults');
+const locationsImportInput = document.getElementById('locationsImportInput');
 
 let floorImg = null;
+let floorImgDataURL = null; // <-- 업로드한 원본 이미지 DataURL 저장
 let nodes = {};
 let edges = {};
 let nodeNames = [];
@@ -97,6 +118,7 @@ let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
 
+/* 캔버스 리사이즈 및 드로우 */
 function resizeCanvas(){
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -104,22 +126,25 @@ function resizeCanvas(){
 }
 window.addEventListener('resize', resizeCanvas);
 
+/* floor image 업로드 처리 (원본 DataURL 저장) */
 fileInput.addEventListener('change',(e)=>{
   const file = e.target.files[0];
   if(!file) return;
   const reader = new FileReader();
   reader.onload = function(evt){
+    floorImgDataURL = evt.target.result; // 원본 DataURL 저장 (다운로드용)
     const img = new Image();
     img.onload = ()=>{ 
       floorImg = img; 
       resetAll(true);
       resizeCanvas();
     };
-    img.src = evt.target.result;
+    img.src = floorImgDataURL;
   };
   reader.readAsDataURL(file);
 });
 
+/* 기존 getLabel 함수 */
 function getLabel(fullName){ 
   const s = fullName.split(' ');
   return s.length > 1 ? s.slice(1).join(' ').trim() : fullName;
@@ -141,6 +166,7 @@ addNodeBtn.addEventListener('click',()=>{
   }
 });
 
+/* 정보박스 표시 */
 let infoTimeout = null;
 function showInfo(text, ms=2000, x=null, y=null){
   if(infoTimeout){ clearTimeout(infoTimeout); infoTimeout=null; }
@@ -267,14 +293,67 @@ function findPath(){
   draw();
 }
 
-function highlightNode(){
-  const input=searchInput.value.trim();
-  if(!input){ alert("검색어 입력"); return; }
-  const found=nodeNames.find(n=>getLabel(n)===input);
-  if(!found){ alert("노드 없음"); return; }
+/** ===== 검색 기능: 노드 이름/타입/참고사항 통합 ===== */
+function normalize(str){
+  return str.replace(/\s+/g,'').replace(/[^\w가-힣]/g,'').toLowerCase();
+}
+
+function searchNodes(query){
+  const q = normalize(query);
+  if(q.length<2) return [];
+  const results=[];
+  for(let name of nodeNames){
+    const node = nodes[name];
+    const fields = [name, node.type, node.note||''];
+    for(let f of fields){
+      if(normalize(f).includes(q)){
+        results.push({fullName:name, display:`${getLabel(name)} [${node.type}] ${node.note||''}`});
+        break;
+      }
+    }
+  }
+  return results;
+}
+
+searchInput.addEventListener('input', ()=>{
+  const query = searchInput.value;
+  const results = searchNodes(query);
+  searchResults.innerHTML='';
+  if(results.length>0){
+    searchResults.style.display='block';
+    results.forEach(r=>{
+      const div = document.createElement('div');
+      div.textContent = r.display;
+      div.style.padding='2px 5px';
+      div.style.cursor='pointer';
+      div.addEventListener('click', ()=>{
+        searchInput.value = getLabel(r.fullName);
+        searchResults.style.display='none';
+        highlightNode(r.fullName);
+      });
+      searchResults.appendChild(div);
+    });
+  } else {
+    searchResults.style.display='none';
+  }
+});
+
+function manualSearch(){
+  const val = searchInput.value.trim();
+  if(!val){ alert('검색어 입력'); return; }
+  const results = searchNodes(val);
+  if(results.length>0) highlightNode(results[0].fullName);
+  else alert('노드 없음');
+}
+
+/** ===== 노드 강조(blink) ===== */
+function highlightNode(name=null){
+  const nodeToBlink = name||nodeNames.find(n=>getLabel(n)===searchInput.value);
+  if(!nodeToBlink){ alert("노드 없음"); return; }
+
   if(blinkInterval) clearInterval(blinkInterval);
-  blinkNode=found;
-  
+  blinkNode = nodeToBlink;
+
   let opacity = 0.2;
   let growing = true;
 
@@ -287,6 +366,7 @@ function highlightNode(){
   setTimeout(()=>{ clearInterval(blinkInterval); blinkInterval=null; blinkNode=null; draw(); },3000);
 }
 
+/** ===== 초기화 ===== */
 function resetAll(skipConfirm=false){
   if(!skipConfirm && !confirm("경로를 초기화하시겠습니까?")) return;
   pathNodes=[];
@@ -297,6 +377,7 @@ function resetAll(skipConfirm=false){
   if(infoTimeout){ clearTimeout(infoTimeout); infoTimeout=null; }
   infoBox.style.display='none';
   startSel.innerHTML=''; endSel.innerHTML='';
+  searchResults.style.display='none';
   draw();
 }
 
@@ -335,7 +416,17 @@ function saveNode(){
     }
   }
 
+  // 선택 목록 자동 갱신: (기존 기능 유지)
+  updateStartEndOptions();
+
   closeNodeDialog(); draw();
+}
+
+/* start/end select를 nodes 변화에 맞춰 갱신하는 헬퍼 */
+function updateStartEndOptions(){
+  // 기존 선택값 유지시키려면 더 복잡해지지만, 간단히 비워두고 사용자가 재선택하도록.
+  // (기존 UX와 충돌하지 않도록 minimal)
+  startSel.innerHTML=''; endSel.innerHTML='';
 }
 
 /** ===== 그리기 ===== */
@@ -367,7 +458,88 @@ function draw(opacity=1){
   });
 }
 
+/** ===== 관리자 다운로드 기능 ===== */
+
+/* 관리자 인증 공통 */
+function requestAdminPassword(){
+  return prompt("관리자 비밀번호를 입력하세요:") || '';
+}
+
+/* floorplan.png 다운로드 (원본 업로드 이미지를 그대로 내보냄) */
+function adminDownloadFloorplan(){
+  if(!floorImgDataURL){ alert('업로드된 floorplan 이미지가 없습니다.'); return; }
+  const inputPwd = requestAdminPassword();
+  if(inputPwd !== password){ alert('비밀번호 틀림. 다운로드 취소.'); return; }
+  // DataURL 그대로 다운로드 (PNG)
+  const a = document.createElement('a');
+  a.href = floorImgDataURL;
+  a.download = 'floorplan.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/* locations.json 다운로드 (nodes, edges, nodeNames, canvas 크기 포함) */
+function adminDownloadLocations(){
+  const inputPwd = requestAdminPassword();
+  if(inputPwd !== password){ alert('비밀번호 틀림. 다운로드 취소.'); return; }
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    canvas: { width: canvas.width, height: canvas.height },
+    nodes: nodes,
+    edges: edges,
+    nodeNames: nodeNames
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'locations.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* locations.json 불러오기 (관리자 전용) - 기존 기능 유지하면서 노드/엣지 불러와 상태 갱신 */
+function adminUploadLocations(){
+  const inputPwd = requestAdminPassword();
+  if(inputPwd !== password){ alert('비밀번호 틀림. 불러오기 취소.'); return; }
+  locationsImportInput.click();
+}
+
+locationsImportInput.addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    try{
+      const data = JSON.parse(evt.target.result);
+      if(data.nodes && data.edges && data.nodeNames){
+        // 덮어쓰기 전에 간단한 확인
+        if(!confirm("현재 메모리에 있는 노드/엣지를 덮어쓰시겠습니까?")) return;
+        nodes = data.nodes;
+        edges = data.edges;
+        nodeNames = data.nodeNames;
+        // 캔버스 크기 정보가 있으면 알림만 (자동 변환은 하지 않음)
+        if(data.canvas) showInfo(`불러옴: canvas(${data.canvas.width}x${data.canvas.height})`,3000);
+        updateStartEndOptions();
+        draw();
+      } else {
+        alert('유효한 locations.json 파일이 아닙니다.');
+      }
+    } catch(err){
+      alert('파일 파싱 실패: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  // 파일 input 초기화
+  locationsImportInput.value = '';
+});
+
+/* 초기 렌더 */
 resizeCanvas();
+
 </script>
 </body>
 </html>
