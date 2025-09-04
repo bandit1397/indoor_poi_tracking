@@ -9,25 +9,33 @@
   * { box-sizing: border-box; }
   body { margin:0; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
-  /* Controls */
+
   #controls {
     position: fixed; top:10px; left:10px;
     background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
     box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
     max-width: calc(100vw - 20px);
-    transition: width 220ms ease, height 220ms ease, padding 220ms ease;
+    transition: max-height 0.3s ease;
+    overflow: hidden;
   }
+  #controls.collapsed .row:not(.header) { display: none; }
+
   #controls .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center; }
+  #controls .row.header { justify-content: space-between; }
+
   select, button, input { margin:0; padding:8px 10px; border-radius:8px; border:1px solid #ddd; font-size:14px; }
   button { background:#0ea5e9; color:white; border:none; cursor:pointer; }
   button.secondary { background:#64748b; }
   button.warn { background:#ef4444; }
   button:active { transform: translateY(1px); }
+  #toggleBtn { font-size:18px; background:none; border:none; cursor:pointer; padding:0 6px; }
+
   #infoBox {
     position: absolute;
     background: rgba(0,0,0,0.7); color:#fff; padding:6px 10px; border-radius:8px; font-weight:600;
     display:none; pointer-events:none; white-space: nowrap; z-index: 9;
   }
+
   #nodeDialog {
     display:none; position:fixed; top:50%; left:50%;
     transform:translate(-50%,-50%);
@@ -37,23 +45,13 @@
   #nodeDialog h3 { margin:0 0 10px 0; font-size:18px; }
   #nodeDialog .typeBtn { margin:4px; padding:6px 10px; cursor:pointer; border:1px solid #ddd; border-radius:999px; background:#f8fafc; }
   #nodeDialog label { display:block; margin-top:8px; }
+
   #searchResults {
     position:absolute; background:#fff; border:1px solid #e5e7eb; border-radius:8px;
     display:none; z-index:10; max-height:220px; overflow-y:auto; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   }
   #searchResults div { padding:6px 8px; cursor:pointer; }
   #searchResults div:hover { background:#eef; }
-
-  /* Toggle (small hamburger) button inside controls */
-  #toggleControlsBtn { display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; padding:0; font-size:18px; background:transparent; color:#0f172a; border-radius:8px; border:1px solid transparent; cursor:pointer; }
-  #toggleControlsBtn:focus { outline:2px solid #cbd5e1; }
-
-  /* Collapsed style: hide most rows visually but keep DOM intact (functionality preserved) */
-  #controls.collapsed { width:56px; height:56px; padding:6px; overflow:visible; }
-  #controls.collapsed strong { display:none; }
-  #controls.collapsed .row { margin-top:4px; }
-  /* hide all but the first row when collapsed */
-  #controls.collapsed .row:not(:first-child) { display:none; }
 
   @media (max-width: 640px) {
     #controls { right:10px; left:10px; }
@@ -64,10 +62,12 @@
 <body>
 
 <div id="controls" role="region" aria-label="길안내 컨트롤">
-  <div class="row" style="align-items:center;">
-    <button id="toggleControlsBtn" aria-expanded="true" title="컨트롤 접기/펼치기">☰</button>
-    <strong style="margin-left:6px;">층간 길안내</strong>
-    <button id="downloadBtn" class="secondary" style="margin-left:8px;" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
+  <div class="row header">
+    <strong>층간 길안내</strong>
+    <button id="toggleBtn" title="컨트롤 접기/펼치기">☰</button>
+  </div>
+  <div class="row">
+    <button id="downloadBtn" class="secondary" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
     <button id="resetBtn" class="warn" title="경로 및 상태 초기화">초기화</button>
   </div>
   <div class="row">
@@ -131,22 +131,20 @@ const searchResults = document.getElementById('searchResults');
 const routeBtn = document.getElementById('routeBtn');
 const resetBtn = document.getElementById('resetBtn');
 const downloadBtn = document.getElementById('downloadBtn');
-const toggleBtn = document.getElementById('toggleControlsBtn');
+const toggleBtn = document.getElementById('toggleBtn');
 const controls = document.getElementById('controls');
 
 let floorImg = null;
-let nodes = {};      // nodes should store normalized coords x,y in 0..1 if possible
-let edges = {};      
-let nodeNames = [];  
+let nodes = {};
+let edges = {};
+let nodeNames = [];
 let blinkNode = null;
 let blinkInterval = null;
 let pathNodes = [];
-let selectingMode = null;  
+let selectingMode = null;
 let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
-
-// helper: compatibility flags
 let imageLoaded = false;
 
 /** ===== 반응형 캔버스 ===== */
@@ -166,29 +164,20 @@ function loadFloorImage(){
     const img = new Image();
     img.onload = () => { floorImg = img; imageLoaded = true; resolve(); };
     img.onerror = reject;
-    img.src = 'floorplan.png'; // 같은 폴더에 배치
+    img.src = 'floorplan.png';
   });
 }
 
 function loadLocations(){
   return fetch('locations.json', { cache: 'no-store' })
-    .then(res => {
-      if(!res.ok) throw new Error('locations.json 로드 실패: ' + res.status);
-      return res.json();
-    })
+    .then(res => res.ok ? res.json() : Promise.reject(res.status))
     .then(data => {
       nodes = data.nodes || {};
       edges = data.edges || {};
       nodeNames = data.nodeNames || Object.keys(nodes);
-      // ensure edges keys exist
       nodeNames.forEach(n => { edges[n] = edges[n] || []; });
     })
-    .catch(err => {
-      console.warn(err);
-      nodes = {};
-      edges = {};
-      nodeNames = [];
-    });
+    .catch(()=>{ nodes={}; edges={}; nodeNames=[]; });
 }
 
 /** ===== 초기화 시퀀스 ===== */
@@ -198,12 +187,6 @@ function loadLocations(){
   resizeCanvas();
   draw();
 })();
-
-/** ===== 라벨 도우미 ===== */
-function getLabel(fullName){
-  const s = fullName.split(' ');
-  return s.length > 1 ? s.slice(1).join(' ').trim() : fullName;
-}
 
 /** ===== UI 바인딩 ===== */
 function bindUI(){
@@ -215,12 +198,12 @@ function bindUI(){
   downloadBtn.addEventListener('click', downloadJSON);
   document.getElementById('searchBtn').addEventListener('click', manualSearch);
 
+  toggleBtn.addEventListener('click', ()=>{ controls.classList.toggle('collapsed'); });
+
   canvas.addEventListener('touchstart', (e) => {
     const t = e.changedTouches[0];
     const rect = canvas.getBoundingClientRect();
-    const x = t.clientX - rect.left;
-    const y = t.clientY - rect.top;
-    handleCanvasTap(x,y);
+    handleCanvasTap(t.clientX - rect.left, t.clientY - rect.top);
   }, {passive:true});
 
   canvas.addEventListener('click', (e) => {
@@ -233,12 +216,10 @@ function bindUI(){
     if(inputPwd === password){
       showInfo('캔버스에서 노드를 추가할 위치를 탭/클릭하세요.', 2000);
       addingNodeMode = true;
-    } else {
-      alert("비밀번호 틀림. 노드추가 취소.");
-    }
+    } else { alert("비밀번호 틀림. 노드추가 취소."); }
   });
 
-  searchInput.addEventListener('input', ()=>{
+  searchInput.addEventListener('input', ()=> {
     const query = searchInput.value;
     const results = searchNodes(query);
     searchResults.innerHTML='';
@@ -254,9 +235,7 @@ function bindUI(){
         });
         searchResults.appendChild(div);
       });
-    } else {
-      searchResults.style.display='none';
-    }
+    } else { searchResults.style.display='none'; }
   });
 
   document.querySelectorAll('#nodeDialog .typeBtn').forEach(btn =>
@@ -264,20 +243,6 @@ function bindUI(){
   );
   document.getElementById('cancelNodeBtn').addEventListener('click', closeNodeDialog);
   document.getElementById('saveNodeBtn').addEventListener('click', saveNode);
-
-  // Toggle controls collapse/expand
-  toggleBtn.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    const isCollapsed = controls.classList.toggle('collapsed');
-    toggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
-    // update tooltip/title
-    toggleBtn.title = isCollapsed ? '컨트롤 펼치기' : '컨트롤 접기';
-  });
-
-  // close search results when clicking elsewhere
-  document.addEventListener('click', (e)=>{
-    if(!controls.contains(e.target)) searchResults.style.display='none';
-  });
 }
 
 /** ===== 정보 토스트 ===== */
@@ -286,13 +251,8 @@ function showInfo(text, ms=2000, x=null, y=null){
   if(infoTimeout){ clearTimeout(infoTimeout); infoTimeout=null; }
   infoBox.style.display='block';
   infoBox.textContent = text;
-  if(x!==null && y!==null){
-    infoBox.style.left = (x+10) + 'px';
-    infoBox.style.top = (y-30) + 'px';
-  } else {
-    infoBox.style.left = '10px';
-    infoBox.style.top = (window.innerHeight-48)+'px';
-  }
+  if(x!==null && y!==null){ infoBox.style.left=(x+10)+'px'; infoBox.style.top=(y-30)+'px'; }
+  else { infoBox.style.left='10px'; infoBox.style.top=(window.innerHeight-48)+'px'; }
   if(ms>0){
     infoTimeout = setTimeout(()=>{ infoBox.style.display='none'; infoTimeout=null; }, ms);
   }
@@ -305,333 +265,166 @@ function enterSelectingMode(mode){
 }
 
 /** ===== 좌표 변환 유틸 ===== */
-// 노드 저장/JSON에서 x,y가 0..1이면 normalized, 아니면 treated as pixel coords.
 function getNodeDisplayCoords(name){
   const n = nodes[name];
   if(!n) return null;
-  const hasNorm = (typeof n.x === 'number' && typeof n.y === 'number' && n.x<=1 && n.y<=1);
-  if(hasNorm){
-    return { x: n.x * canvas.width, y: n.y * canvas.height };
-  }
-  // legacy pixel coords -> scale based on floorImg natural size if available, else assume already fit to canvas
-  if(imageLoaded && floorImg && floorImg.width && floorImg.height){
-    return { x: (n.x / floorImg.width) * canvas.width, y: (n.y / floorImg.height) * canvas.height };
-  }
-  // fallback: treat as pixels on current canvas
-  return { x: n.x, y: n.y };
+  if(typeof n.x==='number' && typeof n.y==='number' && n.x<=1 && n.y<=1) return {x:n.x*canvas.width, y:n.y*canvas.height};
+  if(imageLoaded && floorImg && floorImg.width && floorImg.height) return {x:(n.x/floorImg.width)*canvas.width, y:(n.y/floorImg.height)*canvas.height};
+  return {x:n.x, y:n.y};
 }
-
-function getNodeNormalizedCoordsFromCanvas(px,py){
-  return { x: px / canvas.width, y: py / canvas.height };
-}
+function getNodeNormalizedCoordsFromCanvas(px,py){ return {x:px/canvas.width, y:py/canvas.height}; }
 
 /** ===== 캔버스 탭/클릭 핸들러 ===== */
-let lastClickTime = 0;
+let lastClickTime=0;
 function handleCanvasTap(x,y){
   if(!floorImg) return;
   const clickedNode = findNodeAt(x,y);
 
   if(selectingMode){
     if(clickedNode){
-      const sel = (selectingMode==='start') ? startSel : endSel;
-      sel.innerHTML='';
-      const opt = document.createElement('option');
-      opt.value = clickedNode; opt.textContent = getLabel(clickedNode);
-      sel.appendChild(opt);
-      sel.value = clickedNode;
-      selectingMode = null;
-      showInfo('선택 완료: ' + clickedNode, 1200);
-      draw();
-      return;
-    } else {
-      showInfo('노드를 클릭하여 선택하세요.', 1200);
-      return;
-    }
+      const sel = (selectingMode==='start')?startSel:endSel;
+      sel.innerHTML=''; const opt=document.createElement('option');
+      opt.value=clickedNode; opt.textContent=getLabel(clickedNode);
+      sel.appendChild(opt); sel.value=clickedNode;
+      selectingMode=null; showInfo('선택 완료: '+clickedNode,1200);
+      draw(); return;
+    } else { showInfo('노드를 클릭하여 선택하세요.',1200); return; }
   }
 
-  if(addingNodeMode){
-    tempX = x; tempY = y;
-    openNodeDialog();
-    addingNodeMode = false;
-    return;
-  }
+  if(addingNodeMode){ tempX=x; tempY=y; openNodeDialog(); addingNodeMode=false; return; }
 
   if(clickedNode){
-    const now = Date.now();
-    if(now - lastClickTime < 300){
-      const inputPwd = prompt("노드 삭제 비밀번호를 입력하세요:");
-      if(inputPwd === password){
-        deleteNode(clickedNode);
-        showInfo('노드 삭제 완료',1200,x,y);
-        draw();
-      } else {
-        alert("비밀번호 틀림. 삭제 취소.");
-      }
+    const now=Date.now();
+    if(now-lastClickTime<300){
+      const inputPwd=prompt("노드 삭제 비밀번호를 입력하세요:");
+      if(inputPwd===password){ deleteNode(clickedNode); showInfo('노드 삭제 완료',1200,x,y); draw(); }
+      else{ alert("비밀번호 틀림. 삭제 취소."); }
     } else {
-      const n = nodes[clickedNode];
-      showInfo(`${getLabel(clickedNode)} : ${n.note||'참고사항 없음'}`, 2000, x, y);
+      const n=nodes[clickedNode]; showInfo(`${getLabel(clickedNode)} : ${n.note||'참고사항 없음'}`,2000,x,y);
     }
-    lastClickTime = now;
+    lastClickTime=now;
   }
 }
 
 /** ===== 유틸 ===== */
 function findNodeAt(x,y){
   for(let name of nodeNames){
-    const d = getNodeDisplayCoords(name);
+    const d=getNodeDisplayCoords(name);
     if(!d) continue;
     if(Math.hypot(d.x-x,d.y-y)<=12) return name;
   }
   return null;
 }
 
-/** ===== 그래프 연산: Dijkstra (display coords used for distance calc) ===== */
-function distanceByDisplay(aName,bName){
-  const a = getNodeDisplayCoords(aName);
-  const b = getNodeDisplayCoords(bName);
-  if(!a || !b) return Infinity;
-  return Math.hypot(a.x-b.x,a.y-b.y);
-}
-
+/** ===== 그래프 연산 ===== */
+function distanceByDisplay(a,b){ const da=getNodeDisplayCoords(a), db=getNodeDisplayCoords(b); if(!da||!db) return Infinity; return Math.hypot(da.x-db.x,da.y-db.y); }
 function dijkstra(start,end,allowedNodes=null){
   const visited=new Set(), distances={}, prev={};
-  const targetNodes = allowedNodes || nodeNames.slice();
-  targetNodes.forEach(n=>{ distances[n]=Infinity; });
+  const targetNodes=allowedNodes||nodeNames.slice();
+  targetNodes.forEach(n=>distances[n]=Infinity);
   distances[start]=0;
-
   while(visited.size<targetNodes.length){
     let minNode=null;
-    for(let n of targetNodes){
-      if(!visited.has(n)&&(minNode===null||distances[n]<distances[minNode])) minNode=n;
-    }
-    if(minNode===null) break;
-    if(minNode===end) break;
+    for(let n of targetNodes) if(!visited.has(n)&&(minNode===null||distances[n]<distances[minNode])) minNode=n;
+    if(minNode===null) break; if(minNode===end) break;
     visited.add(minNode);
-
-    const adj = edges[minNode]||[];
+    const adj=edges[minNode]||[];
     for(let nb of adj){
       if(!targetNodes.includes(nb)) continue;
-      const alt = distances[minNode]+distanceByDisplay(minNode,nb);
+      const alt=distances[minNode]+distanceByDisplay(minNode,nb);
       if(alt<distances[nb]) { distances[nb]=alt; prev[nb]=minNode; }
     }
   }
-
   const path=[]; let curr=end;
   while(curr){ path.unshift(curr); curr=prev[curr]; }
   if(path[0]!==start) return [];
   return path;
 }
-
-function multiFloorPath(startName,endName){
-  return dijkstra(startName,endName);
-}
-
-function findPath(){
-  const s = startSel.value; const e = endSel.value;
-  if(!s || !e){ alert('출발지/목적지를 선택하세요.'); return; }
-  pathNodes = multiFloorPath(s,e) || [];
-  if(pathNodes.length===0) alert('경로를 찾을 수 없습니다.');
-  draw();
-}
+function multiFloorPath(s,e){ return dijkstra(s,e); }
+function findPath(){ const s=startSel.value,e=endSel.value; if(!s||!e){ alert('출발지/목적지를 선택하세요.'); return; } pathNodes=multiFloorPath(s,e)||[]; if(pathNodes.length===0) alert('경로를 찾을 수 없습니다.'); draw(); }
 
 /** ===== 검색 ===== */
-function normalize(str){
-  return String(str||'').replace(/\s+/g,'').replace(/[^\w가-힣]/g,'').toLowerCase();
-}
-
-function searchNodes(query){
-  const q = normalize(query);
-  if(q.length<2) return [];
-  const results=[];
-  for(let name of nodeNames){
-    const node = nodes[name];
-    const fields = [name, node.type, node.note||''];
-    for(let f of fields){
-      if(normalize(f).includes(q)){
-        results.push({fullName:name, display:`${getLabel(name)} [${node.type}] ${node.note||''}`});
-        break;
-      }
-    }
-  }
-  return results;
-}
-
-function manualSearch(){
-  const val = searchInput.value.trim();
-  if(!val){ alert('검색어를 입력하세요.'); return; }
-  const results = searchNodes(val);
-  if(results.length>0) highlightNode(results[0].fullName);
-  else alert('노드를 찾을 수 없습니다.');
-}
+function normalize(str){ return String(str||'').replace(/\s+/g,'').replace(/[^\w가-힣]/g,'').toLowerCase(); }
+function searchNodes(query){ const q=normalize(query); if(q.length<2) return []; const results=[]; for(let name of nodeNames){ const node=nodes[name]; const fields=[name,node.type,node.note||'']; for(let f of fields){ if(normalize(f).includes(q)){ results.push({fullName:name, display:`${getLabel(name)} [${node.type}] ${node.note||''}`}); break; } } } return results; }
+function manualSearch(){ const val=searchInput.value.trim(); if(!val){ alert('검색어를 입력하세요.'); return; } const results=searchNodes(val); if(results.length>0) highlightNode(results[0].fullName); else alert('노드를 찾을 수 없습니다.'); }
 
 /** ===== 깜빡임 강조 ===== */
 function highlightNode(name=null){
-  const nodeToBlink = name || nodeNames.find(n=>getLabel(n)===searchInput.value);
+  const nodeToBlink=name||nodeNames.find(n=>getLabel(n)===searchInput.value);
   if(!nodeToBlink){ alert("노드 없음"); return; }
-
   if(blinkInterval) clearInterval(blinkInterval);
-  blinkNode = nodeToBlink;
-
-  let opacity = 0.2;
-  let growing = true;
-
-  blinkInterval=setInterval(()=>{
-    if(growing){ opacity += 0.1; if(opacity >= 0.85) growing = false; } 
-    else { opacity -= 0.1; if(opacity <= 0.2) growing = true; }
-    draw(opacity);
-  },100);
-
+  blinkNode=nodeToBlink;
+  let opacity=0.2,growing=true;
+  blinkInterval=setInterval(()=>{ if(growing){ opacity+=0.1;if(opacity>=0.85) growing=false; } else { opacity-=0.1;if(opacity<=0.2) growing=true; } draw(opacity); },100);
   setTimeout(()=>{ clearInterval(blinkInterval); blinkInterval=null; blinkNode=null; draw(); },3000);
 }
 
 /** ===== 초기화 ===== */
-function resetAll(skipConfirm=false){
-  if(!skipConfirm && !confirm("경로 및 강조를 초기화하시겠습니까?")) return;
-  pathNodes=[];
-  if(blinkInterval){ clearInterval(blinkInterval); blinkInterval=null; }
-  blinkNode=null;
-  selectingMode = null;
-  addingNodeMode = false;
-  if(infoTimeout){ clearTimeout(infoTimeout); infoTimeout=null; }
-  infoBox.style.display='none';
-  startSel.innerHTML=''; endSel.innerHTML='';
-  searchResults.style.display='none';
-  draw();
-}
+function resetAll(skipConfirm=false){ if(!skipConfirm && !confirm("경로 및 강조를 초기화하시겠습니까?")) return; pathNodes=[]; if(blinkInterval){ clearInterval(blinkInterval); blinkInterval=null; } blinkNode=null; selectingMode=null; addingNodeMode=false; if(infoTimeout){ clearTimeout(infoTimeout); infoTimeout=null; } infoBox.style.display='none'; startSel.innerHTML=''; endSel.innerHTML=''; searchResults.style.display='none'; draw(); }
 
 /** ===== 노드 다이얼로그 ===== */
 function openNodeDialog(){ document.getElementById('nodeDialog').style.display='block'; }
 function closeNodeDialog(){ document.getElementById('nodeDialog').style.display='none'; }
-
-function addEdge(a,b){
-  edges[a]=edges[a]||[]; edges[b]=edges[b]||[];
-  if(!edges[a].includes(b)) edges[a].push(b);
-  if(!edges[b].includes(a)) edges[b].push(a);
-}
-
+function addEdge(a,b){ edges[a]=edges[a]||[]; edges[b]=edges[b]||[]; if(!edges[a].includes(b)) edges[a].push(b); if(!edges[b].includes(a)) edges[b].push(a); }
 function saveNode(){
   const name=document.getElementById('nodeName').value.trim();
-  const floor=document.querySelector('input[name="floorType"]:checked').value + document.getElementById('floorNumber').value + '층';
+  const floor=document.querySelector('input[name="floorType"]:checked').value+document.getElementById('floorNumber').value+'층';
   const note=document.getElementById('nodeNote').value;
   if(!name){ alert("노드 이름을 입력하세요."); return; }
   const fullName=`${floor} ${name}`;
   if(nodes[fullName]){ alert("이미 존재하는 노드입니다."); return; }
-
-  // 저장 시: 캔버스 기준으로 정규화된 좌표(0..1)로 저장
-  const norm = getNodeNormalizedCoordsFromCanvas(tempX, tempY);
-  nodes[fullName]={x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note};
+  const norm=getNodeNormalizedCoordsFromCanvas(tempX,tempY);
+  nodes[fullName]={x:Number(norm.x.toFixed(6)),y:Number(norm.y.toFixed(6)),floor,type:selectedType,note};
   nodeNames.push(fullName);
-
-  // 같은 층 자동 연결(기본)
-  nodeNames.forEach(n=>{
-    if(n!==fullName && nodes[n].floor===floor){ addEdge(n, fullName); }
-  });
-
-  // 타입별(엘리/계단/에스컬레이터) 동일 라벨 층간 연결
-  if(selectedType==='escalator' || selectedType==='stairs' || selectedType==='elevator'){
-    for(let n of nodeNames){
-      if(n===fullName) continue;
-      if(nodes[n].type===selectedType && getLabel(n)===getLabel(fullName)){
-        addEdge(n, fullName);
-      }
-    }
+  nodeNames.forEach(n=>{ if(n!==fullName && nodes[n].floor===floor) addEdge(n,fullName); });
+  if(selectedType==='escalator'||selectedType==='stairs'||selectedType==='elevator'){
+    for(let n of nodeNames){ if(n===fullName) continue; if(nodes[n].type===selectedType && getLabel(n)===getLabel(fullName)) addEdge(n,fullName); }
   }
-
   closeNodeDialog(); draw();
-  document.getElementById('nodeName').value='';
-  document.getElementById('nodeNote').value='';
+  document.getElementById('nodeName').value=''; document.getElementById('nodeNote').value='';
 }
-
-function deleteNode(name){
-  delete nodes[name];
-  nodeNames = nodeNames.filter(nm=>nm!==name);
-  delete edges[name];
-  for(let key in edges){ edges[key]=edges[key].filter(nm=>nm!==name); }
-  pathNodes=[];
-}
+function deleteNode(name){ delete nodes[name]; nodeNames=nodeNames.filter(nm=>nm!==name); for(let k in edges){ edges[k]=edges[k].filter(e=>e!==name); } draw(); }
 
 /** ===== JSON 다운로드 ===== */
 function downloadJSON(){
-  const data = { nodes, edges, nodeNames };
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'locations.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showInfo('locations.json 다운로드 완료', 1400);
+  const blob=new Blob([JSON.stringify({nodes,edges,nodeNames},null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='locations.json';
+  a.click(); URL.revokeObjectURL(a.href);
 }
 
-/** ===== 그리기 ===== */
-function draw(opacity=1){
+/** ===== 라벨 ===== */
+function getLabel(fullName){ return fullName.replace(/.*?\s/,''); }
+
+/** ===== 드로잉 ===== */
+function draw(blinkOpacity=0.0){
+  if(!floorImg) return;
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(floorImg,0,0,canvas.width,canvas.height);
 
-  if(floorImg){
-    ctx.drawImage(floorImg,0,0,canvas.width,canvas.height);
-  }
+  // edges
+  ctx.strokeStyle='rgba(0,120,250,0.4)'; ctx.lineWidth=2;
+  for(let n in edges){ const d1=getNodeDisplayCoords(n); edges[n].forEach(nb=>{ const d2=getNodeDisplayCoords(nb); if(d1&&d2){ ctx.beginPath(); ctx.moveTo(d1.x,d1.y); ctx.lineTo(d2.x,d2.y); ctx.stroke(); } }); }
 
-  // 경로
-  if(pathNodes.length>1){
-    ctx.strokeStyle='red'; ctx.lineWidth=4; ctx.lineJoin='round';
+  // path
+  if(pathNodes.length>0){
+    ctx.strokeStyle='orange'; ctx.lineWidth=4;
     ctx.beginPath();
-    pathNodes.forEach((n,i)=>{
-      const d = getNodeDisplayCoords(n);
-      if(!d) return;
-      if(i===0) ctx.moveTo(d.x,d.y);
-      else ctx.lineTo(d.x,d.y);
-    });
+    pathNodes.forEach((n,i)=>{ const d=getNodeDisplayCoords(n); if(d){ if(i===0) ctx.moveTo(d.x,d.y); else ctx.lineTo(d.x,d.y); } });
     ctx.stroke();
   }
 
-  // 노드
-  ctx.font = '12px system-ui';
-  ctx.textBaseline = 'middle';
+  // nodes
   nodeNames.forEach(n=>{
-    const node=nodes[n]; if(!node) return;
-    const d = getNodeDisplayCoords(n);
-    if(!d) return;
-    let radius = 9;
-    if(n===blinkNode) radius = 14;
+    const d=getNodeDisplayCoords(n); if(!d) return;
     ctx.beginPath();
-    ctx.arc(d.x,d.y,radius,0,Math.PI*2);
-    if(n===blinkNode){ ctx.fillStyle=`rgba(255,255,0,${opacity})`; }
-    else if(pathNodes.includes(n)){ ctx.fillStyle='red'; }
-    else {
-      ctx.fillStyle = (node.type==='normal') ? '#2563eb'
-                    : (node.type==='stairs') ? '#f59e0b'
-                    : (node.type==='elevator') ? '#16a34a'
-                    : '#9333ea';
-    }
-    ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.stroke();
-
-    // 라벨
-    ctx.fillStyle='black';
-    ctx.fillText(getLabel(n), d.x + radius + 6, d.y);
+    ctx.arc(d.x,d.y,10,0,Math.PI*2);
+    if(n===blinkNode){ ctx.fillStyle=`rgba(255,0,0,${blinkOpacity})`; }
+    else { switch(nodes[n].type){ case 'elevator': ctx.fillStyle='purple'; break; case 'stairs': ctx.fillStyle='green'; break; case 'escalator': ctx.fillStyle='blue'; break; default: ctx.fillStyle='yellow'; } }
+    ctx.fill(); ctx.strokeStyle='#000'; ctx.stroke();
   });
 }
-
-/** ===== 접근성 보완: 셀렉트 직접 선택 지원(옵션 목록 채우기) ===== */
-function refreshSelectOptions(){
-  const makeOptions = (sel) => {
-    const curr = sel.value;
-    sel.innerHTML = '<option value="">(캔버스에서 선택 가능)</option>';
-    nodeNames.forEach(n=>{
-      const opt = document.createElement('option');
-      opt.value = n; opt.textContent = getLabel(n);
-      sel.appendChild(opt);
-    });
-    if(curr && nodeNames.includes(curr)) sel.value = curr;
-  };
-  makeOptions(startSel);
-  makeOptions(endSel);
-}
-setInterval(refreshSelectOptions, 1500);
-
 </script>
+
 </body>
 </html>
