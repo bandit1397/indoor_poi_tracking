@@ -9,11 +9,13 @@
   * { box-sizing: border-box; }
   body { margin:0; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
+  /* Controls */
   #controls {
     position: fixed; top:10px; left:10px;
     background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
     box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
     max-width: calc(100vw - 20px);
+    transition: width 220ms ease, height 220ms ease, padding 220ms ease;
   }
   #controls .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center; }
   select, button, input { margin:0; padding:8px 10px; border-radius:8px; border:1px solid #ddd; font-size:14px; }
@@ -41,6 +43,18 @@
   }
   #searchResults div { padding:6px 8px; cursor:pointer; }
   #searchResults div:hover { background:#eef; }
+
+  /* Toggle (small hamburger) button inside controls */
+  #toggleControlsBtn { display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; padding:0; font-size:18px; background:transparent; color:#0f172a; border-radius:8px; border:1px solid transparent; cursor:pointer; }
+  #toggleControlsBtn:focus { outline:2px solid #cbd5e1; }
+
+  /* Collapsed style: hide most rows visually but keep DOM intact (functionality preserved) */
+  #controls.collapsed { width:56px; height:56px; padding:6px; overflow:visible; }
+  #controls.collapsed strong { display:none; }
+  #controls.collapsed .row { margin-top:4px; }
+  /* hide all but the first row when collapsed */
+  #controls.collapsed .row:not(:first-child) { display:none; }
+
   @media (max-width: 640px) {
     #controls { right:10px; left:10px; }
     select, input { min-width: 140px; }
@@ -50,9 +64,10 @@
 <body>
 
 <div id="controls" role="region" aria-label="길안내 컨트롤">
-  <div class="row">
-    <strong>층간 길안내</strong>
-    <button id="downloadBtn" class="secondary" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
+  <div class="row" style="align-items:center;">
+    <button id="toggleControlsBtn" aria-expanded="true" title="컨트롤 접기/펼치기">☰</button>
+    <strong style="margin-left:6px;">층간 길안내</strong>
+    <button id="downloadBtn" class="secondary" style="margin-left:8px;" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
     <button id="resetBtn" class="warn" title="경로 및 상태 초기화">초기화</button>
   </div>
   <div class="row">
@@ -116,6 +131,8 @@ const searchResults = document.getElementById('searchResults');
 const routeBtn = document.getElementById('routeBtn');
 const resetBtn = document.getElementById('resetBtn');
 const downloadBtn = document.getElementById('downloadBtn');
+const toggleBtn = document.getElementById('toggleControlsBtn');
+const controls = document.getElementById('controls');
 
 let floorImg = null;
 let nodes = {};      // nodes should store normalized coords x,y in 0..1 if possible
@@ -247,6 +264,20 @@ function bindUI(){
   );
   document.getElementById('cancelNodeBtn').addEventListener('click', closeNodeDialog);
   document.getElementById('saveNodeBtn').addEventListener('click', saveNode);
+
+  // Toggle controls collapse/expand
+  toggleBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const isCollapsed = controls.classList.toggle('collapsed');
+    toggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
+    // update tooltip/title
+    toggleBtn.title = isCollapsed ? '컨트롤 펼치기' : '컨트롤 접기';
+  });
+
+  // close search results when clicking elsewhere
+  document.addEventListener('click', (e)=>{
+    if(!controls.contains(e.target)) searchResults.style.display='none';
+  });
 }
 
 /** ===== 정보 토스트 ===== */
