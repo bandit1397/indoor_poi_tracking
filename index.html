@@ -55,16 +55,7 @@
   /* hide all */
   #controls.collapsed .row {display: none;  /* 모든 row 기본 숨김 */
   }
-
-  #controls.collapsed .row:first-child {
-    display: flex;          /* ☰ 버튼 row만 표시 */
-    position: absolute;     /* 부모(#controls) 기준 절대 위치 */
-    top: 6px;
-    left: 6px;
-    width: calc(100% - 12px); /* padding 고려 */
-    gap: 6px;
-    align-items: center;
-  }
+  
   @media (max-width: 640px) {
     #controls { right:10px; left:10px; }
     select, input { min-width: 140px; }
