@@ -2,39 +2,33 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>🏬 다층 백화점 길안내 (반응형 + 상대좌표)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>🏬 백화점 길안내 (반응형 + 정밀 좌표)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  :root { color-scheme: light dark; }
-  body { margin:0; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
-  canvas { display:block; border:1px solid #ccc; cursor:crosshair; }
+  body { margin:0; overflow:hidden; font-family:sans-serif; }
+  canvas { display:block; background:#f3f4f6; }
   #controls {
     position: fixed; top:10px; left:10px;
-    background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
+    background: rgba(255,255,255,0.95); padding:10px; border-radius:10px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
     max-width: calc(100vw - 20px);
+    z-index:10;
   }
-  #controls .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center; }
-  select, button, input { padding:8px 10px; border-radius:8px; border:1px solid #ddd; font-size:14px; }
-  button { background:#0ea5e9; color:white; border:none; cursor:pointer; }
+  .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  select, button, input { padding:6px 10px; border-radius:6px; border:1px solid #ccc; font-size:14px; }
+  button { background:#0ea5e9; color:#fff; border:none; cursor:pointer; }
   button.secondary { background:#64748b; }
   button.warn { background:#ef4444; }
-  #infoBox {
-    position: absolute;
-    background: rgba(0,0,0,0.7); color:#fff; padding:6px 10px; border-radius:8px; font-weight:600;
-    display:none; pointer-events:none; white-space: nowrap; z-index: 9;
-  }
   #nodeDialog {
     display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-    background:#fff; border:1px solid #e5e7eb; padding:16px; border-radius:12px;
-    z-index:1000; box-shadow:0 12px 30px rgba(0,0,0,0.25); width:min(92vw,420px);
+    background:#fff; border:1px solid #ccc; padding:16px; border-radius:12px; z-index:1000;
+    width:min(90vw,400px); box-shadow:0 12px 30px rgba(0,0,0,0.25);
   }
-  #nodeDialog h3 { margin:0 0 10px; font-size:18px; }
-  #nodeDialog .typeBtn { margin:4px; padding:6px 10px; cursor:pointer; border:1px solid #ddd; border-radius:999px; background:#f8fafc; }
+  #nodeDialog h3 { margin:0 0 10px; }
+  .typeBtn { margin:4px; padding:6px 10px; border:1px solid #ccc; border-radius:999px; background:#f8fafc; cursor:pointer; }
 </style>
 </head>
 <body>
-
 <div id="controls">
   <div class="row">
     <strong>길안내</strong>
@@ -42,18 +36,17 @@
     <button id="resetBtn" class="warn">초기화</button>
   </div>
   <div class="row">
-    출발지: <select id="start"></select>
-    목적지: <select id="end"></select>
+    출발: <select id="start"></select>
+    도착: <select id="end"></select>
     <button id="routeBtn">길찾기</button>
   </div>
   <div class="row">
-    검색: <input type="text" id="searchInput" placeholder="검색어 입력">
+    검색: <input type="text" id="searchInput" placeholder="노드 이름">
     <button id="searchBtn">검색</button>
     <button id="addNodeBtn">노드추가</button>
   </div>
 </div>
 
-<div id="infoBox"></div>
 <canvas id="map"></canvas>
 
 <!-- 노드 추가 다이얼로그 -->
@@ -62,18 +55,18 @@
   <div>
     <label><input type="radio" name="floorType" value="지상" checked> 지상</label>
     <label><input type="radio" name="floorType" value="지하"> 지하</label>
-    <input type="number" id="floorNumber" min="1" value="1" style="width:70px"> 층
+    <input type="number" id="floorNumber" min="1" value="1" style="width:60px;"> 층
   </div>
   <label>노드 이름: <input type="text" id="nodeName"></label>
   <div style="margin-top:8px;">
     <span>타입:</span><br>
-    <button type="button" class="typeBtn" data-type="normal">normal</button>
-    <button type="button" class="typeBtn" data-type="elevator">elevator</button>
-    <button type="button" class="typeBtn" data-type="stairs">stairs</button>
-    <button type="button" class="typeBtn" data-type="escalator">escalator</button>
+    <button class="typeBtn" data-type="normal">normal</button>
+    <button class="typeBtn" data-type="elevator">elevator</button>
+    <button class="typeBtn" data-type="stairs">stairs</button>
+    <button class="typeBtn" data-type="escalator">escalator</button>
   </div>
   <label>참고사항: <input type="text" id="nodeNote"></label>
-  <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+  <div style="margin-top:12px; text-align:right;">
     <button id="cancelNodeBtn" class="secondary">취소</button>
     <button id="saveNodeBtn">저장</button>
   </div>
@@ -81,61 +74,78 @@
 
 <script>
 const canvas=document.getElementById('map'),ctx=canvas.getContext('2d');
-let floorImg=null,nodes={},edges={},nodeNames=[],blinkNode=null,blinkInterval=null,pathNodes=[],selectingMode=null,addingNodeMode=false,tempX=0,tempY=0,selectedType='normal',password='knp123';
-const infoBox=document.getElementById('infoBox'),startSel=document.getElementById('start'),endSel=document.getElementById('end'),addNodeBtn=document.getElementById('addNodeBtn');
-function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;draw();}
-window.addEventListener('resize',resizeCanvas);
+let floorImg=null,drawWidth=0,drawHeight=0,offsetX=0,offsetY=0;
+let nodes={},edges={},nodeNames=[],pathNodes=[],blinkNode=null;
+let addingNode=false,tempX=0,tempY=0,selectedType='normal',password='knp123';
+
+function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;calcDrawArea();draw();}
+function calcDrawArea(){
+  const imgRatio=floorImg.width/floorImg.height;
+  const canvasRatio=canvas.width/canvas.height;
+  if(imgRatio>canvasRatio){
+    drawWidth=canvas.width;
+    drawHeight=canvas.width/imgRatio;
+    offsetX=0;offsetY=(canvas.height-drawHeight)/2;
+  }else{
+    drawHeight=canvas.height;
+    drawWidth=canvas.height*imgRatio;
+    offsetY=0;offsetX=(canvas.width-drawWidth)/2;
+  }
+}
+
 function loadFloorImage(){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{floorImg=img;res();};img.onerror=rej;img.src='floorplan.png';});}
-function loadLocations(){return fetch('locations.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{nodes=d.nodes||{};edges=d.edges||{};nodeNames=d.nodeNames||Object.keys(nodes);nodeNames.forEach(n=>edges[n]=edges[n]||[]);}).catch(()=>{nodes={};edges={};nodeNames=[];});}
-(async function init(){await Promise.all([loadFloorImage(),loadLocations()]);bindUI();resizeCanvas();draw();})();
+function loadLocations(){return fetch('locations.json',{cache:'no-store'}).then(r=>r.json()).then(d=>{nodes=d.nodes||{};edges=d.edges||{};nodeNames=d.nodeNames||Object.keys(nodes);nodeNames.forEach(n=>edges[n]=edges[n]||[]);}).catch(()=>{});}
+(async function init(){await Promise.all([loadFloorImage(),loadLocations()]);bindUI();resizeCanvas();})();
+window.addEventListener('resize',resizeCanvas);
+
 function bindUI(){
 document.getElementById('routeBtn').onclick=findPath;
-document.getElementById('resetBtn').onclick=()=>resetAll(false);
+document.getElementById('resetBtn').onclick=()=>{pathNodes=[];blinkNode=null;draw();};
 document.getElementById('downloadBtn').onclick=downloadJSON;
-document.getElementById('searchBtn').onclick=manualSearch;
-addNodeBtn.onclick=()=>{const p=prompt('비밀번호 입력:');if(p===password){showInfo('추가할 위치를 클릭',1500);addingNodeMode=true;}};
+document.getElementById('searchBtn').onclick=searchNode;
+document.getElementById('addNodeBtn').onclick=()=>{const p=prompt('비밀번호:');if(p===password)addingNode=true;};
 document.querySelectorAll('.typeBtn').forEach(b=>b.onclick=()=>selectedType=b.dataset.type);
-document.getElementById('cancelNodeBtn').onclick=closeNodeDialog;
+document.getElementById('cancelNodeBtn').onclick=()=>document.getElementById('nodeDialog').style.display='none';
 document.getElementById('saveNodeBtn').onclick=saveNode;
-canvas.addEventListener('click',e=>{const r=canvas.getBoundingClientRect();handleTap(e.clientX-r.left,e.clientY-r.top);});
-canvas.addEventListener('touchstart',e=>{const t=e.changedTouches[0],r=canvas.getBoundingClientRect();handleTap(t.clientX-r.left,t.clientY-r.top);},{passive:true});
+canvas.addEventListener('click',e=>handleTap(e.clientX,e.clientY));
+canvas.addEventListener('touchstart',e=>{const t=e.changedTouches[0];handleTap(t.clientX,t.clientY);});
 }
-function showInfo(t,ms=2000){infoBox.style.display='block';infoBox.textContent=t;infoBox.style.left='10px';infoBox.style.top=(window.innerHeight-50)+'px';setTimeout(()=>infoBox.style.display='none',ms);}
+
 function handleTap(x,y){
-const rx=x/canvas.width,ry=y/canvas.height;
-const clicked=findNodeAt(rx,ry);
-if(addingNodeMode){tempX=rx;tempY=ry;openNodeDialog();addingNodeMode=false;return;}
-if(clicked){alert(getLabel(clicked)+(nodes[clicked].note?` (${nodes[clicked].note})`:''));}
+const cx=x-canvas.getBoundingClientRect().left,cy=y-canvas.getBoundingClientRect().top;
+if(cx<offsetX||cy<offsetY||cx>offsetX+drawWidth||cy>offsetY+drawHeight)return;
+const rx=(cx-offsetX)/drawWidth,ry=(cy-offsetY)/drawHeight;
+if(addingNode){tempX=rx;tempY=ry;document.getElementById('nodeDialog').style.display='block';addingNode=false;return;}
+const clicked=findNodeAt(rx,ry);if(clicked)alert(clicked);
 }
-function findNodeAt(rx,ry){for(const n of nodeNames){const nd=nodes[n];if(Math.hypot(nd.x-rx,nd.y-ry)<=0.02)return n;}return null;}
+
+function findNodeAt(rx,ry){for(const n of nodeNames){const nd=nodes[n];if(Math.hypot(nd.x-rx,nd.y-ry)<0.02)return n;}return null;}
+
 function saveNode(){
 const name=document.getElementById('nodeName').value.trim();
 const floor=document.querySelector('input[name="floorType"]:checked').value+document.getElementById('floorNumber').value+'층';
 const note=document.getElementById('nodeNote').value;
-if(!name){alert('노드 이름');return;}
+if(!name)return alert('노드 이름 입력');
 const fullName=`${floor} ${name}`;
 nodes[fullName]={x:tempX,y:tempY,floor,type:selectedType,note};
 nodeNames.push(fullName);
-nodeNames.forEach(n=>{if(n!==fullName&&nodes[n].floor===floor)addEdge(n,fullName);});
-if(['escalator','stairs','elevator'].includes(selectedType)){for(let n of nodeNames){if(n!==fullName&&nodes[n].type===selectedType&&getLabel(n)===getLabel(fullName))addEdge(n,fullName);}}
-closeNodeDialog();draw();
+edges[fullName]=[];
+document.getElementById('nodeDialog').style.display='none';
+draw();
 }
-function addEdge(a,b){edges[a]=edges[a]||[];edges[b]=edges[b]||[];if(!edges[a].includes(b))edges[a].push(b);if(!edges[b].includes(a))edges[b].push(a);}
-function openNodeDialog(){document.getElementById('nodeDialog').style.display='block';}
-function closeNodeDialog(){document.getElementById('nodeDialog').style.display='none';}
-function getLabel(n){const s=n.split(' ');return s.slice(1).join(' ');}
-function draw(){ctx.clearRect(0,0,canvas.width,canvas.height);if(floorImg)ctx.drawImage(floorImg,0,0,canvas.width,canvas.height);
-if(pathNodes.length>1){ctx.strokeStyle='red';ctx.lineWidth=4;ctx.beginPath();pathNodes.forEach((n,i)=>{const nd=nodes[n];const x=nd.x*canvas.width,y=nd.y*canvas.height;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();}
-nodeNames.forEach(n=>{const nd=nodes[n];const x=nd.x*canvas.width,y=nd.y*canvas.height;ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.fillStyle='blue';ctx.fill();ctx.stroke();ctx.fillStyle='black';ctx.font='12px sans-serif';ctx.fillText(getLabel(n),x+10,y);});
+
+function draw(){
+ctx.clearRect(0,0,canvas.width,canvas.height);
+if(floorImg)ctx.drawImage(floorImg,offsetX,offsetY,drawWidth,drawHeight);
+if(pathNodes.length>1){ctx.strokeStyle='red';ctx.lineWidth=4;ctx.beginPath();pathNodes.forEach((n,i)=>{const nd=nodes[n];const x=offsetX+nd.x*drawWidth,y=offsetY+nd.y*drawHeight;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);});ctx.stroke();}
+nodeNames.forEach(n=>{const nd=nodes[n];const x=offsetX+nd.x*drawWidth,y=offsetY+nd.y*drawHeight;ctx.beginPath();ctx.arc(x,y,8,0,Math.PI*2);ctx.fillStyle=(n===blinkNode)?'red':'blue';ctx.fill();ctx.stroke();ctx.fillStyle='black';ctx.font='12px sans-serif';ctx.fillText(n.split(' ').slice(1).join(' '),x+10,y);});
 }
-function distance(n1,n2){return Math.hypot(n1.x-n2.x,n1.y-n2.y);}
-function dijkstra(start,end){const visited=new Set(),dist={},prev={};nodeNames.forEach(n=>dist[n]=Infinity);dist[start]=0;
-while(visited.size<nodeNames.length){let u=null;for(let n of nodeNames){if(!visited.has(n)&&(u===null||dist[n]<dist[u]))u=n;}if(u===null||u===end)break;visited.add(u);
-for(let v of edges[u]||[]){const alt=dist[u]+distance(nodes[u],nodes[v]);if(alt<dist[v]){dist[v]=alt;prev[v]=u;}}}
-const path=[];let curr=end;while(curr){path.unshift(curr);curr=prev[curr];}return(path[0]===start)?path:[];}
-function findPath(){const s=startSel.value,e=endSel.value;if(!s||!e){alert('출발지/목적지');return;}pathNodes=dijkstra(s,e);draw();}
-function manualSearch(){const q=document.getElementById('searchInput').value.trim();if(!q)return;const found=nodeNames.find(n=>getLabel(n).includes(q));if(found){blinkNode=found;draw();setTimeout(()=>{blinkNode=null;draw();},3000);}else alert('검색 없음');}
-function resetAll(){pathNodes=[];blinkNode=null;draw();}
+
+function searchNode(){const q=document.getElementById('searchInput').value.trim();if(!q)return;const f=nodeNames.find(n=>n.includes(q));if(f){blinkNode=f;draw();setTimeout(()=>{blinkNode=null;draw();},3000);}else alert('없음');}
+
+function findPath(){const s=document.getElementById('start').value,e=document.getElementById('end').value;if(!s||!e)return alert('선택');pathNodes=dijkstra(s,e);draw();}
+function dijkstra(start,end){const dist={},prev={},visited=new Set();nodeNames.forEach(n=>dist[n]=Infinity);dist[start]=0;while(visited.size<nodeNames.length){let u=null;for(let n of nodeNames){if(!visited.has(n)&&(u===null||dist[n]<dist[u]))u=n;}if(!u||u===end)break;visited.add(u);for(let v of edges[u]||[]){const alt=dist[u]+Math.hypot(nodes[u].x-nodes[v].x,nodes[u].y-nodes[v].y);if(alt<dist[v]){dist[v]=alt;prev[v]=u;}}}const path=[];let cur=end;while(cur){path.unshift(cur);cur=prev[cur];}return(path[0]===start)?path:[];}
+
 function downloadJSON(){const blob=new Blob([JSON.stringify({nodes,edges,nodeNames},null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='locations.json';a.click();URL.revokeObjectURL(url);}
 </script>
 </body>
