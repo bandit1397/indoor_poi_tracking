@@ -207,6 +207,8 @@ function loadLocations(){
   bindUI();
   resizeCanvas();
   draw();
+  // ☰ 버튼만 보이도록 초기 상태에서 collapsed 적용
+  controls.classList.add('collapsed');
 })();
 
 /** ===== 라벨 도우미 ===== */
