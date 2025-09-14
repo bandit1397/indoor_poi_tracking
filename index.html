@@ -542,15 +542,28 @@ function saveNode(){
     if(n!==fullName && nodes[n].floor===floor){ addEdge(n, fullName); }
   });
 
-  // 타입별(엘리/계단/에스컬레이터) 동일 라벨 층간 연결
-  if(selectedType==='escalator' || selectedType==='stairs' || selectedType==='elevator'){
-    for(let n of nodeNames){
-      if(n===fullName) continue;
-      if(nodes[n].type===selectedType && getLabel(n)===getLabel(fullName)){
-        addEdge(n, fullName);
-      }
+  // 타입별(엘리/계단/에스컬레이터) 동일 라벨 층간 연결 (기본층 기준으로 연결)
+if (selectedType === 'escalator' || selectedType === 'stairs' || selectedType === 'elevator') {
+  const newFloor = nodes[fullName].floor;         // 새 노드의 전체 층 이름 (예: "B1-2")
+  const newLabel = getLabel(fullName);            // 새 노드 라벨
+
+  for (let n of nodeNames) {
+    if (n === fullName) continue;
+
+    const other = nodes[n];
+    if (other.type !== selectedType) continue;
+    if (getLabel(n) !== newLabel) continue;
+
+    const otherFloor = other.floor;               // 기존 노드의 층 이름
+    const baseNew = newFloor.split("-")[0];       // 새 노드 기본층 (예: "B1")
+    const baseOther = otherFloor.split("-")[0];   // 기존 노드 기본층
+
+    // 같은 기본층이면 연결하지 않고, 다른 기본층이면 연결
+    if (baseNew !== baseOther) {
+      addEdge(n, fullName);
     }
   }
+}
 
   closeNodeDialog(); draw();
   document.getElementById('nodeName').value='';
