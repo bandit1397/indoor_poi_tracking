@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>🏬 다층 백화점 길안내 (층간 이동 자동 연결) — 상대좌표 지원</title>
+<title>🏬 다층 백화점 길안내 (수정본) — 상대좌표 지원</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <style>
   :root { color-scheme: light dark; }
@@ -209,6 +209,24 @@ function loadLocations(){
       nodeNames = data.nodeNames || Object.keys(nodes);
       // ensure edges keys exist
       nodeNames.forEach(n => { edges[n] = edges[n] || []; });
+
+      // --- IMPORTANT FIX: ensure every node has an explicit 'label' property (the user-provided name)
+      // This makes type-based inter-floor linking reliable even when floor strings contain spaces.
+      nodeNames.forEach(n => {
+        if(!nodes[n].label){
+          // if node object contains floor, we can strip that prefix to recover label
+          if(nodes[n].floor){
+            const prefix = nodes[n].floor + ' ';
+            if(n.startsWith(prefix)) nodes[n].label = n.slice(prefix.length);
+            else nodes[n].label = n; // fallback
+          } else {
+            // fallback: take the last token
+            const parts = n.split(' ');
+            nodes[n].label = parts.slice(-1)[0] || n;
+          }
+        }
+      });
+
     })
     .catch(err => {
       console.warn(err);
@@ -230,6 +248,8 @@ function loadLocations(){
 
 /** ===== 라벨 도우미 ===== */
 function getLabel(fullName){
+  // Prefer explicit stored label for robustness. If missing, fall back to original behaviour.
+  if(nodes[fullName] && nodes[fullName].label) return nodes[fullName].label;
   const s = fullName.split(' ');
   return s.length > 1 ? s.slice(1).join(' ').trim() : fullName;
 }
@@ -334,7 +354,6 @@ function enterSelectingMode(mode){
 }
 
 /** ===== 좌표 변환 유틸 ===== */
-// 노드 저장/JSON에서 x,y가 0..1이면 normalized, 아니면 treated as pixel coords.
 function getNodeDisplayCoords(name){
   const n = nodes[name];
   if(!n) return null;
@@ -342,16 +361,15 @@ function getNodeDisplayCoords(name){
   if(hasNorm){
     return { x: n.x * canvas.width, y: n.y * canvas.height };
   }
-  // legacy pixel coords -> scale based on floorImg natural size if available, else assume already fit to canvas
   if(imageLoaded && floorImg && floorImg.width && floorImg.height){
     return { x: (n.x / floorImg.width) * canvas.width, y: (n.y / floorImg.height) * canvas.height };
   }
-  // fallback: treat as pixels on current canvas
   return { x: n.x, y: n.y };
 }
 
 function getNodeNormalizedCoordsFromCanvas(px,py){
   return { x: px / canvas.width, y: py / canvas.height };
+
 }
 
 /** ===== 캔버스 탭/클릭 핸들러 ===== */
@@ -474,7 +492,7 @@ function searchNodes(query){
   const results=[];
   for(let name of nodeNames){
     const node = nodes[name];
-    const fields = [name, node.type, node.note||''];
+    const fields = [name, node.type, node.note||'', node.label||''];
     for(let f of fields){
       if(normalize(f).includes(q)){
         results.push({fullName:name, display:`${getLabel(name)} [${node.type}] ${node.note||''}`});
@@ -550,21 +568,22 @@ function saveNode(){
 
   // 캔버스 좌표를 정규화
   const norm = getNodeNormalizedCoordsFromCanvas(tempX, tempY);
-  nodes[fullName] = { x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note };
+  // store label (the pure node name) explicitly — this is the key fix for robust inter-floor matching
+  nodes[fullName] = { x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note, label: name };
   nodeNames.push(fullName);
 
-  // 같은 층(구역 단위) 자동 연결
+  // 같은 층(구역 단위) 자동 연결 (unchanged behaviour)
   nodeNames.forEach(n => {
     if(n!==fullName && nodes[n].floor===floor){
       addEdge(n, fullName);
     }
   });
 
-  // 타입별 층간 연결
+  // 타입별 층간 연결 — now uses explicit 'label' property to compare node identity across floors
   if(selectedType==='escalator' || selectedType==='stairs' || selectedType==='elevator'){
     for(let n of nodeNames){
       if(n===fullName) continue;
-      if(nodes[n].type===selectedType && getLabel(n)===getLabel(fullName)){
+      if(nodes[n].type===selectedType && (nodes[n].label||getLabel(n)) === name){
         addEdge(n, fullName);
       }
     }
