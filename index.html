@@ -103,15 +103,26 @@
 <div id="nodeDialog" role="dialog" aria-modal="true" aria-labelledby="nodeDialogTitle">
   <h3 id="nodeDialogTitle">새 노드 추가</h3>
   <div>
-    <label>
-      <input type="radio" name="floorType" value="지상" checked> 지상
-    </label>
-    <label>
-      <input type="radio" name="floorType" value="지하"> 지하
-    </label>
-    <input type="number" id="floorMainNumber" min="1" value="1" style="width:50px"> 층 -
-    <select id="floorSubNumber"></select>
-  </div>
+  <label>
+    <input type="radio" name="floorType" value="지상" checked> 지상
+      </label>
+      <label>
+        <input type="radio" name="floorType" value="지하"> 지하
+      </label>
+      <input type="number" id="floorNumber" min="1" value="1" style="width:70px"> 층
+  
+      <select id="floorSubNumber">
+        <option value="">(세부 없음)</option>
+        <option value="A">A구역</option>
+        <option value="B">B구역</option>
+        <option value="C">C구역</option>
+        <option value="서관">서관</option>
+        <option value="동관">동관</option>
+        <option value="1구역">1구역</option>
+        <option value="2구역">2구역</option>
+        <option value="3구역">3구역</option>
+      </select>
+    </div>
   <label>노드 이름:
     <input type="text" id="nodeName" placeholder="예: 1번 계단 / 에스1 / 엘리1">
   </label>
@@ -526,22 +537,44 @@ function addEdge(a,b){
 }
 
 function saveNode(){
-  const name=document.getElementById('nodeName').value.trim();
-  const floor=document.querySelector('input[name="floorType"]:checked').value + document.getElementById('floorNumber').value + '층';
-  const note=document.getElementById('nodeNote').value;
-  if(!name){ alert("노드 이름을 입력하세요."); return; }
-  const fullName=`${floor} ${name}`;
-  if(nodes[fullName]){ alert("이미 존재하는 노드입니다."); return; }
+  const name = document.getElementById('nodeName').value.trim();
+  const floorType = document.querySelector('input[name="floorType"]:checked').value; // 지상/지하
+  const floorNumber = document.getElementById('floorNumber').value; // 숫자층
+  const floorSub = document.getElementById('floorSubNumber')?.value || ""; // 세분화 번호 (없으면 빈값)
+  const note = document.getElementById('nodeNote').value;
 
-  // 저장 시: 캔버스 기준으로 정규화된 좌표(0..1)로 저장
+  if(!name){ 
+    alert("노드 이름을 입력하세요."); 
+    return; 
+  }
+
+  // 층 문자열: 지상3-A층, 지상3-B층 형태
+  const floor = floorType + floorNumber + (floorSub ? "-" + floorSub : "") + "층";
+
+  const fullName = `${floor} ${name}`;
+  if(nodes[fullName]){ 
+    alert("이미 존재하는 노드입니다."); 
+    return; 
+  }
+
+  // 저장 시: 캔버스 기준 좌표(0..1) 저장
   const norm = getNodeNormalizedCoordsFromCanvas(tempX, tempY);
-  nodes[fullName]={x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note};
+  nodes[fullName] = {
+    x: Number(norm.x.toFixed(6)), 
+    y: Number(norm.y.toFixed(6)), 
+    floor, 
+    type: selectedType, 
+    note
+  };
   nodeNames.push(fullName);
 
-  // 같은 층 자동 연결(기본)
-  nodeNames.forEach(n=>{
-    if(n!==fullName && nodes[n].floor===floor){ addEdge(n, fullName); }
+  // 같은 층 자동 연결
+  nodeNames.forEach(n => {
+    if(n !== fullName && nodes[n].floor === floor){ 
+      addEdge(n, fullName); 
+    }
   });
+}
 
   // 타입별(엘리/계단/에스컬레이터) 동일 라벨 층간 연결
   if(selectedType==='escalator' || selectedType==='stairs' || selectedType==='elevator'){
