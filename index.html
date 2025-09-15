@@ -109,7 +109,21 @@
     <label>
       <input type="radio" name="floorType" value="지하"> 지하
     </label>
-    <input type="number" id="floorNumber" min="1" value="1" style="width:70px"> 층
+    <label>
+      층/구역:
+      <select id="floorNumber">
+        <option>1층 1구역</option>
+        <option>1층 2구역</option>
+        <option>1층 3구역</option>
+        <option>2층 1구역</option>
+        <option>2층 2구역</option>
+        <option>2층 3구역</option>
+        <option>3층 1구역</option>
+        <option>3층 2구역</option>
+        <option>3층 3구역</option>
+        <!-- 필요에 따라 확장 -->
+      </select>
+    </label>
   </div>
   <label>노드 이름:
     <input type="text" id="nodeName" placeholder="예: 1번 계단 / 에스1 / 엘리1">
@@ -525,24 +539,28 @@ function addEdge(a,b){
 }
 
 function saveNode(){
-  const name=document.getElementById('nodeName').value.trim();
-  const floor=document.querySelector('input[name="floorType"]:checked').value + document.getElementById('floorNumber').value + '층';
-  const note=document.getElementById('nodeNote').value;
+  const name = document.getElementById('nodeName').value.trim();
+  const floorType = document.querySelector('input[name="floorType"]:checked').value;
+  const floor = floorType + ' ' + document.getElementById('floorNumber').value; // 선택된 구역 포함
+  const note = document.getElementById('nodeNote').value;
+  
   if(!name){ alert("노드 이름을 입력하세요."); return; }
-  const fullName=`${floor} ${name}`;
+  const fullName = `${floor} ${name}`;
   if(nodes[fullName]){ alert("이미 존재하는 노드입니다."); return; }
 
-  // 저장 시: 캔버스 기준으로 정규화된 좌표(0..1)로 저장
+  // 캔버스 좌표를 정규화
   const norm = getNodeNormalizedCoordsFromCanvas(tempX, tempY);
-  nodes[fullName]={x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note};
+  nodes[fullName] = { x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note };
   nodeNames.push(fullName);
 
-  // 같은 층 자동 연결(기본)
-  nodeNames.forEach(n=>{
-    if(n!==fullName && nodes[n].floor===floor){ addEdge(n, fullName); }
+  // 같은 층(구역 단위) 자동 연결
+  nodeNames.forEach(n => {
+    if(n!==fullName && nodes[n].floor===floor){
+      addEdge(n, fullName);
+    }
   });
 
-  // 타입별(엘리/계단/에스컬레이터) 동일 라벨 층간 연결
+  // 타입별 층간 연결
   if(selectedType==='escalator' || selectedType==='stairs' || selectedType==='elevator'){
     for(let n of nodeNames){
       if(n===fullName) continue;
