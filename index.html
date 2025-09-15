@@ -550,8 +550,8 @@ function saveNode(){
 
   // 층 문자열: 지상3-A층, 지상3-B층 형태
   const floor = floorType + floorNumber + (floorSub ? "-" + floorSub : "") + "층";
-
   const fullName = `${floor} ${name}`;
+
   if(nodes[fullName]){ 
     alert("이미 존재하는 노드입니다."); 
     return; 
@@ -574,6 +574,13 @@ function saveNode(){
       addEdge(n, fullName); 
     }
   });
+
+  // ✅ UI 업데이트
+  closeNodeDialog();
+  document.getElementById('nodeName').value = "";
+  document.getElementById('nodeNote').value = "";
+  draw();
+  showInfo(`노드 추가 완료: ${fullName}`, 1500);
 }
 
   // 타입별(엘리/계단/에스컬레이터) 동일 라벨 층간 연결
