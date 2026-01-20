@@ -686,6 +686,32 @@ function refreshSelectOptions(){
 }
 setInterval(refreshSelectOptions, 1500);
 
+function showNodeJson(fullName){
+  const obj = {};
+  obj[fullName] = nodes[fullName];
+
+  const text = JSON.stringify(obj, null, 2)
+    .replace(/^{\n/, '')
+    .replace(/\n}$/, '');
+
+  const panel = document.getElementById('nodeJsonPanel');
+  const ta = document.getElementById('nodeJsonOutput');
+  ta.value = text;
+  panel.style.display = 'block';
+  ta.select();
+}
+
+function copyNodeJson(){
+  const ta = document.getElementById('nodeJsonOutput');
+  ta.select();
+  document.execCommand('copy');
+  alert('JSON 복사 완료 → locations.json에 붙여넣으세요');
+}
+
+function closeNodeJson(){
+  document.getElementById('nodeJsonPanel').style.display = 'none';
+}
+
 </script>
 <!-- 🔽 노드 JSON 출력 패널 -->
 <div id="nodeJsonPanel" style="
