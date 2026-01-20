@@ -135,6 +135,14 @@
       "type": "escalator",
       "note": "목동방면",
       "label": "에스3"
+    },
+    "지하 2층 2구역 역무실": {
+      "x": ,
+      "y": ,
+      "floor": "지하 2층 2구역",
+      "type": "normal",
+      "note": "",
+      "label": "역무실"
     }
   },
   "edges": {
