@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>🏬 다층 백화점 길안내 (층간 이동 자동 연결) — 상대좌표 지원</title>
+<title>🏬 다층 백화점 길안내 (수정본) — 상대좌표 지원</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <style>
   :root { color-scheme: light dark; }
@@ -52,9 +52,11 @@
   #controls.collapsed { width:56px; height:56px; padding:6px; overflow:visible; }
   #controls.collapsed strong { display:none; }
   #controls.collapsed .row { margin-top:4px; }
-  /* hide all but the first row when collapsed */
-  #controls.collapsed .row:not(:first-child) { display:none; }
-
+  /* hide all */
+  #controls.collapsed .row:not(.toggleRow) {
+   display: none;
+  }
+  
   @media (max-width: 640px) {
     #controls { right:10px; left:10px; }
     select, input { min-width: 140px; }
@@ -64,23 +66,34 @@
 <body>
 
 <div id="controls" role="region" aria-label="길안내 컨트롤">
-  <div class="row" style="align-items:center;">
+
+  <!-- 1️⃣ ☰ 버튼 전용 row -->
+  <div class="row toggleRow">
     <button id="toggleControlsBtn" aria-expanded="true" title="컨트롤 접기/펼치기">☰</button>
-    <strong style="margin-left:6px;">층간 길안내</strong>
-    <button id="downloadBtn" class="secondary" style="margin-left:8px;" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
+  </div>
+
+  <!-- 2️⃣ 층간 길안내 + 다운로드/초기화 버튼 -->
+  <div class="row">
+    <strong>층간 길안내</strong>
+    <button id="downloadBtn" class="secondary" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
     <button id="resetBtn" class="warn" title="경로 및 상태 초기화">초기화</button>
   </div>
+
+  <!-- 3️⃣ 출발지/목적지/길찾기 -->
   <div class="row">
     출발지: <select id="start" title="출발지 선택(캔버스에서 노드를 클릭해도 됩니다)"></select>
     목적지: <select id="end" title="목적지 선택(캔버스에서 노드를 클릭해도 됩니다)"></select>
     <button id="routeBtn" title="최단 경로 찾기">길찾기</button>
   </div>
+
+  <!-- 4️⃣ 위치 검색 / 노드추가 -->
   <div class="row" style="position:relative;">
     위치 검색: <input type="text" id="searchInput" autocomplete="off" placeholder="예: 1번 계단 / 푸드코트">
     <button id="searchBtn">검색</button>
     <button id="addNodeBtn">노드추가</button>
     <div id="searchResults" role="listbox" aria-label="검색 결과"></div>
   </div>
+
 </div>
 
 <div id="infoBox"></div>
@@ -96,7 +109,21 @@
     <label>
       <input type="radio" name="floorType" value="지하"> 지하
     </label>
-    <input type="number" id="floorNumber" min="1" value="1" style="width:70px"> 층
+    <label>
+      층/구역:
+      <select id="floorNumber">
+        <option>1층 1구역</option>
+        <option>1층 2구역</option>
+        <option>1층 3구역</option>
+        <option>2층 1구역</option>
+        <option>2층 2구역</option>
+        <option>2층 3구역</option>
+        <option>3층 1구역</option>
+        <option>3층 2구역</option>
+        <option>3층 3구역</option>
+        <!-- 필요에 따라 확장 -->
+      </select>
+    </label>
   </div>
   <label>노드 이름:
     <input type="text" id="nodeName" placeholder="예: 1번 계단 / 에스1 / 엘리1">
@@ -182,6 +209,24 @@ function loadLocations(){
       nodeNames = data.nodeNames || Object.keys(nodes);
       // ensure edges keys exist
       nodeNames.forEach(n => { edges[n] = edges[n] || []; });
+
+      // --- IMPORTANT FIX: ensure every node has an explicit 'label' property (the user-provided name)
+      // This makes type-based inter-floor linking reliable even when floor strings contain spaces.
+      nodeNames.forEach(n => {
+        if(!nodes[n].label){
+          // if node object contains floor, we can strip that prefix to recover label
+          if(nodes[n].floor){
+            const prefix = nodes[n].floor + ' ';
+            if(n.startsWith(prefix)) nodes[n].label = n.slice(prefix.length);
+            else nodes[n].label = n; // fallback
+          } else {
+            // fallback: take the last token
+            const parts = n.split(' ');
+            nodes[n].label = parts.slice(-1)[0] || n;
+          }
+        }
+      });
+
     })
     .catch(err => {
       console.warn(err);
@@ -197,10 +242,14 @@ function loadLocations(){
   bindUI();
   resizeCanvas();
   draw();
+  // ☰ 버튼만 보이도록 초기 상태에서 collapsed 적용
+  controls.classList.add('collapsed');
 })();
 
 /** ===== 라벨 도우미 ===== */
 function getLabel(fullName){
+  // Prefer explicit stored label for robustness. If missing, fall back to original behaviour.
+  if(nodes[fullName] && nodes[fullName].label) return nodes[fullName].label;
   const s = fullName.split(' ');
   return s.length > 1 ? s.slice(1).join(' ').trim() : fullName;
 }
@@ -305,7 +354,6 @@ function enterSelectingMode(mode){
 }
 
 /** ===== 좌표 변환 유틸 ===== */
-// 노드 저장/JSON에서 x,y가 0..1이면 normalized, 아니면 treated as pixel coords.
 function getNodeDisplayCoords(name){
   const n = nodes[name];
   if(!n) return null;
@@ -313,16 +361,15 @@ function getNodeDisplayCoords(name){
   if(hasNorm){
     return { x: n.x * canvas.width, y: n.y * canvas.height };
   }
-  // legacy pixel coords -> scale based on floorImg natural size if available, else assume already fit to canvas
   if(imageLoaded && floorImg && floorImg.width && floorImg.height){
     return { x: (n.x / floorImg.width) * canvas.width, y: (n.y / floorImg.height) * canvas.height };
   }
-  // fallback: treat as pixels on current canvas
   return { x: n.x, y: n.y };
 }
 
 function getNodeNormalizedCoordsFromCanvas(px,py){
   return { x: px / canvas.width, y: py / canvas.height };
+
 }
 
 /** ===== 캔버스 탭/클릭 핸들러 ===== */
@@ -445,7 +492,7 @@ function searchNodes(query){
   const results=[];
   for(let name of nodeNames){
     const node = nodes[name];
-    const fields = [name, node.type, node.note||''];
+    const fields = [name, node.type, node.note||'', node.label||''];
     for(let f of fields){
       if(normalize(f).includes(q)){
         results.push({fullName:name, display:`${getLabel(name)} [${node.type}] ${node.note||''}`});
@@ -510,36 +557,43 @@ function addEdge(a,b){
 }
 
 function saveNode(){
-  const name=document.getElementById('nodeName').value.trim();
-  const floor=document.querySelector('input[name="floorType"]:checked').value + document.getElementById('floorNumber').value + '층';
-  const note=document.getElementById('nodeNote').value;
+  const name = document.getElementById('nodeName').value.trim();
+  const floorType = document.querySelector('input[name="floorType"]:checked').value;
+  const floor = floorType + ' ' + document.getElementById('floorNumber').value; // 선택된 구역 포함
+  const note = document.getElementById('nodeNote').value;
+  
   if(!name){ alert("노드 이름을 입력하세요."); return; }
-  const fullName=`${floor} ${name}`;
+  const fullName = `${floor} ${name}`;
   if(nodes[fullName]){ alert("이미 존재하는 노드입니다."); return; }
 
-  // 저장 시: 캔버스 기준으로 정규화된 좌표(0..1)로 저장
+  // 캔버스 좌표를 정규화
   const norm = getNodeNormalizedCoordsFromCanvas(tempX, tempY);
-  nodes[fullName]={x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note};
+  // store label (the pure node name) explicitly — this is the key fix for robust inter-floor matching
+  nodes[fullName] = { x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note, label: name };
   nodeNames.push(fullName);
 
-  // 같은 층 자동 연결(기본)
-  nodeNames.forEach(n=>{
-    if(n!==fullName && nodes[n].floor===floor){ addEdge(n, fullName); }
+  // 같은 층(구역 단위) 자동 연결 (unchanged behaviour)
+  nodeNames.forEach(n => {
+    if(n!==fullName && nodes[n].floor===floor){
+      addEdge(n, fullName);
+    }
   });
 
-  // 타입별(엘리/계단/에스컬레이터) 동일 라벨 층간 연결
+  // 타입별 층간 연결 — now uses explicit 'label' property to compare node identity across floors
   if(selectedType==='escalator' || selectedType==='stairs' || selectedType==='elevator'){
     for(let n of nodeNames){
       if(n===fullName) continue;
-      if(nodes[n].type===selectedType && getLabel(n)===getLabel(fullName)){
+      if(nodes[n].type===selectedType && (nodes[n].label||getLabel(n)) === name){
         addEdge(n, fullName);
       }
     }
   }
 
   closeNodeDialog(); draw();
+  draw();
   document.getElementById('nodeName').value='';
   document.getElementById('nodeNote').value='';
+  showNodeJson(fullName);  
 }
 
 function deleteNode(name){
@@ -632,6 +686,56 @@ function refreshSelectOptions(){
 }
 setInterval(refreshSelectOptions, 1500);
 
+function showNodeJson(fullName){
+  const obj = {};
+  obj[fullName] = nodes[fullName];
+
+  const text = JSON.stringify(obj, null, 2)
+    .replace(/^{\n/, '')
+    .replace(/\n}$/, '');
+
+  const panel = document.getElementById('nodeJsonPanel');
+  const ta = document.getElementById('nodeJsonOutput');
+  ta.value = text;
+  panel.style.display = 'block';
+  ta.select();
+}
+
+function copyNodeJson(){
+  const ta = document.getElementById('nodeJsonOutput');
+  ta.select();
+  document.execCommand('copy');
+  alert('JSON 복사 완료 → locations.json에 붙여넣으세요');
+}
+
+function closeNodeJson(){
+  document.getElementById('nodeJsonPanel').style.display = 'none';
+}
+
 </script>
+<!-- 🔽 노드 JSON 출력 패널 -->
+<div id="nodeJsonPanel" style="
+  position:fixed;
+  bottom:10px;
+  right:10px;
+  width:min(92vw,420px);
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  padding:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.2);
+  display:none;
+  z-index:2000;
+">
+  <strong>📌 새 노드 JSON</strong>
+  <textarea id="nodeJsonOutput"
+    style="width:100%;height:160px;margin-top:6px;font-family:monospace;font-size:12px;"
+    readonly></textarea>
+  <div style="text-align:right;margin-top:6px;">
+    <button onclick="copyNodeJson()" class="secondary">복사</button>
+    <button onclick="closeNodeJson()" class="warn">닫기</button>
+  </div>
+</div>
+
 </body>
 </html>
