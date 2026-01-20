@@ -255,13 +255,21 @@ function loadFromLocal(){
 
 /** ===== 초기화 시퀀스 ===== */
 (async function init(){
-  await Promise.allSettled([loadFloorImage(), loadLocations()]);
+  await loadFloorImage();
+
+  // ✅ localStorage 우선
+  const loaded = loadFromLocal();
+  if(!loaded){
+    await loadLocations(); // locations.json fallback
+  }
+
   bindUI();
   resizeCanvas();
   draw();
   // ☰ 버튼만 보이도록 초기 상태에서 collapsed 적용
   controls.classList.add('collapsed');
 })();
+
 
 /** ===== 라벨 도우미 ===== */
 function getLabel(fullName){
