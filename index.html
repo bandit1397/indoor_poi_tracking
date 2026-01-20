@@ -602,6 +602,12 @@ function deleteNode(name){
   pathNodes=[];
 }
 
+function saveToLocal(){
+  const data = { nodes, edges, nodeNames };
+  localStorage.setItem('indoorMapData', JSON.stringify(data));
+}
+
+
 /** ===== JSON 다운로드 ===== */
 function downloadJSON(){
   const data = { nodes, edges, nodeNames };
