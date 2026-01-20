@@ -589,7 +589,9 @@ function saveNode(){
     }
   }
 
-  closeNodeDialog(); draw();
+  closeNodeDialog(); 
+  draw();
+  refreshSelectOptions();
   document.getElementById('nodeName').value='';
   document.getElementById('nodeNote').value='';
 }
