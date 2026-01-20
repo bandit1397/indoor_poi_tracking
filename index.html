@@ -236,6 +236,23 @@ function loadLocations(){
     });
 }
 
+function loadFromLocal(){
+  const saved = localStorage.getItem('indoorMapData');
+  if(!saved) return false;
+
+  try{
+    const data = JSON.parse(saved);
+    nodes = data.nodes || {};
+    edges = data.edges || {};
+    nodeNames = data.nodeNames || Object.keys(nodes);
+    return true;
+  }catch(e){
+    console.warn('localStorage 데이터 오류', e);
+    return false;
+  }
+}
+
+
 /** ===== 초기화 시퀀스 ===== */
 (async function init(){
   await Promise.allSettled([loadFloorImage(), loadLocations()]);
