@@ -602,6 +602,7 @@ function deleteNode(name){
   delete edges[name];
   for(let key in edges){ edges[key]=edges[key].filter(nm=>nm!==name); }
   pathNodes=[];
+  refreshSelectOptions();
 }
 
 /** ===== JSON 다운로드 ===== */
