@@ -626,6 +626,7 @@ function deleteNode(name){
   delete edges[name];
   for(let key in edges){ edges[key]=edges[key].filter(nm=>nm!==name); }
   pathNodes=[];
+  saveToLocal();   // 👈 바로 여기
 }
 
 function saveToLocal(){
