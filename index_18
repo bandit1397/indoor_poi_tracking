@@ -685,29 +685,6 @@ function refreshSelectOptions(){
 setInterval(refreshSelectOptions, 1500);
 
 </script>
-<!-- 🔽 노드 JSON 출력 패널 -->
-<div id="nodeJsonPanel" style="
-  position:fixed;
-  bottom:10px;
-  right:10px;
-  width:min(92vw,420px);
-  background:#fff;
-  border:1px solid #e5e7eb;
-  border-radius:10px;
-  padding:10px;
-  box-shadow:0 8px 24px rgba(0,0,0,.2);
-  display:none;
-  z-index:2000;
-">
-  <strong>📌 새 노드 JSON</strong>
-  <textarea id="nodeJsonOutput"
-    style="width:100%;height:160px;margin-top:6px;font-family:monospace;font-size:12px;"
-    readonly></textarea>
-  <div style="text-align:right;margin-top:6px;">
-    <button onclick="copyNodeJson()" class="secondary">복사</button>
-    <button onclick="closeNodeJson()" class="warn">닫기</button>
-  </div>
-</div>
-
+ 
 </body>
 </html>
