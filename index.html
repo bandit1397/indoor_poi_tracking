@@ -590,8 +590,10 @@ function saveNode(){
   }
 
   closeNodeDialog(); draw();
+  draw();
   document.getElementById('nodeName').value='';
   document.getElementById('nodeNote').value='';
+  showNodeJson(fullName);  
 }
 
 function deleteNode(name){
