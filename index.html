@@ -11,12 +11,21 @@
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
   /* Controls */
   #controls {
-    position: fixed; top:10px; left:10px;
-    background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
+    position: fixed;
+    top: 10px; /* will be overridden by JS for center-top on load */
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255,255,255,0.95);
+    padding:10px;
+    border-radius:10px;
+    z-index:10;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    backdrop-filter: saturate(1.2) blur(4px);
     max-width: calc(100vw - 20px);
     transition: width 220ms ease, height 220ms ease, padding 220ms ease;
-  }
+    touch-action: none; /* important for mobile drag */
+}
+
   #controls .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center; }
   select, button, input { margin:0; padding:8px 10px; border-radius:8px; border:1px solid #ddd; font-size:14px; }
   button { background:#0ea5e9; color:white; border:none; cursor:pointer; }
