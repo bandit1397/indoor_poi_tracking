@@ -11,7 +11,7 @@
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
   /* Controls */
   #controls {
-    position: fixed; top:10px; left:50%; transform: translateX(-50%);
+    position: fixed; top:10px; left:10px;
     background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
     box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
     max-width: calc(100vw - 20px);
@@ -58,13 +58,9 @@
   }
   
   @media (max-width: 640px) {
-  #controls {
-    left:50%;
-    right:auto;
-    transform: translateX(-50%);
+    #controls { right:10px; left:10px; }
+    select, input { min-width: 140px; }
   }
-}
-
 </style>
 </head>
 <body>
@@ -625,116 +621,53 @@ function downloadJSON(){
 }
 
 /** ===== 그리기 ===== */
-function draw(opacity = 1) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function draw(opacity=1){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // ===============================
-  // 1️⃣ 지도 이미지 비율 유지 렌더링 (contain)
-  // ===============================
-  let mapOffsetX = 0;
-  let mapOffsetY = 0;
-  let mapDrawWidth = canvas.width;
-  let mapDrawHeight = canvas.height;
-  let scaleX = 1;
-  let scaleY = 1;
-
-  if (floorImg) {
-    const imgRatio = floorImg.width / floorImg.height;
-    const canvasRatio = canvas.width / canvas.height;
-
-    if (canvasRatio > imgRatio) {
-      // 캔버스가 더 넓음 → 높이에 맞춤
-      mapDrawHeight = canvas.height;
-      mapDrawWidth = mapDrawHeight * imgRatio;
-      mapOffsetX = (canvas.width - mapDrawWidth) / 2;
-      mapOffsetY = 0;
-    } else {
-      // 캔버스가 더 높음 → 너비에 맞춤
-      mapDrawWidth = canvas.width;
-      mapDrawHeight = mapDrawWidth / imgRatio;
-      mapOffsetX = 0;
-      mapOffsetY = (canvas.height - mapDrawHeight) / 2;
-    }
-
-    scaleX = mapDrawWidth / canvas.width;
-    scaleY = mapDrawHeight / canvas.height;
-
-    ctx.drawImage(
-      floorImg,
-      mapOffsetX,
-      mapOffsetY,
-      mapDrawWidth,
-      mapDrawHeight
-    );
+  if(floorImg){
+    ctx.drawImage(floorImg,0,0,canvas.width,canvas.height);
   }
 
-  // ===============================
-  // 2️⃣ 경로 그리기 (지도 기준 좌표 보정)
-  // ===============================
-  if (pathNodes.length > 1) {
-    ctx.strokeStyle = 'red';
-    ctx.lineWidth = 4;
-    ctx.lineJoin = 'round';
+  // 경로
+  if(pathNodes.length>1){
+    ctx.strokeStyle='red'; ctx.lineWidth=4; ctx.lineJoin='round';
     ctx.beginPath();
-
-    pathNodes.forEach((n, i) => {
+    pathNodes.forEach((n,i)=>{
       const d = getNodeDisplayCoords(n);
-      if (!d) return;
-
-      const x = mapOffsetX + d.x * scaleX;
-      const y = mapOffsetY + d.y * scaleY;
-
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      if(!d) return;
+      if(i===0) ctx.moveTo(d.x,d.y);
+      else ctx.lineTo(d.x,d.y);
     });
-
     ctx.stroke();
   }
 
-  // ===============================
-  // 3️⃣ 노드 + 라벨 그리기 (지도 기준 좌표 보정)
-  // ===============================
+  // 노드
   ctx.font = '12px system-ui';
   ctx.textBaseline = 'middle';
-
-  nodeNames.forEach(n => {
-    const node = nodes[n];
-    if (!node) return;
-
+  nodeNames.forEach(n=>{
+    const node=nodes[n]; if(!node) return;
     const d = getNodeDisplayCoords(n);
-    if (!d) return;
-
-    const x = mapOffsetX + d.x * scaleX;
-    const y = mapOffsetY + d.y * scaleY;
-
+    if(!d) return;
     let radius = 9;
-    if (n === blinkNode) radius = 14;
-
+    if(n===blinkNode) radius = 14;
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-
-    if (n === blinkNode) {
-      ctx.fillStyle = `rgba(255,255,0,${opacity})`;
-    } else if (pathNodes.includes(n)) {
-      ctx.fillStyle = 'red';
-    } else {
-      ctx.fillStyle =
-        node.type === 'normal' ? '#2563eb' :
-        node.type === 'stairs' ? '#f59e0b' :
-        node.type === 'elevator' ? '#16a34a' :
-        '#9333ea';
+    ctx.arc(d.x,d.y,radius,0,Math.PI*2);
+    if(n===blinkNode){ ctx.fillStyle=`rgba(255,255,0,${opacity})`; }
+    else if(pathNodes.includes(n)){ ctx.fillStyle='red'; }
+    else {
+      ctx.fillStyle = (node.type==='normal') ? '#2563eb'
+                    : (node.type==='stairs') ? '#f59e0b'
+                    : (node.type==='elevator') ? '#16a34a'
+                    : '#9333ea';
     }
-
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.stroke();
 
     // 라벨
-    ctx.fillStyle = 'black';
-    ctx.fillText(getLabel(n), x + radius + 6, y);
+    ctx.fillStyle='black';
+    ctx.fillText(getLabel(n), d.x + radius + 6, d.y);
   });
 }
-
 
 /** ===== 접근성 보완: 셀렉트 직접 선택 지원(옵션 목록 채우기) ===== */
 function refreshSelectOptions(){
