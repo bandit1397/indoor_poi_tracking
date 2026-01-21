@@ -273,57 +273,84 @@ function loadLocations(){
 })();
 
 /** ===== 컨트롤 패널 드래그 이동 ===== */
+/** ===== 컨트롤 패널 드래그 이동 (PC + Mobile) ===== */
 (function enableControlsDrag(){
   let isDragging = false;
   let startX = 0, startY = 0;
   let origLeft = 0, origTop = 0;
   let moved = false;
 
-  controls.addEventListener('mousedown', (e) => {
+  function startDrag(x, y){
     isDragging = true;
     moved = false;
     controls.classList.add('dragging');
 
     const rect = controls.getBoundingClientRect();
-    startX = e.clientX;
-    startY = e.clientY;
+    startX = x;
+    startY = y;
     origLeft = rect.left;
     origTop = rect.top;
 
-    // fixed + 중앙정렬 해제 → 픽셀 이동
     controls.style.left = rect.left + 'px';
     controls.style.top = rect.top + 'px';
     controls.style.transform = 'none';
+  }
 
-    e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', (e) => {
+  function moveDrag(x, y){
     if (!isDragging) return;
 
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
+    const dx = x - startX;
+    const dy = y - startY;
 
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
 
     controls.style.left = (origLeft + dx) + 'px';
     controls.style.top = (origTop + dy) + 'px';
-  });
+  }
 
-  document.addEventListener('mouseup', () => {
+  function endDrag(){
     if (!isDragging) return;
     isDragging = false;
     controls.classList.remove('dragging');
+  }
+
+  // ===== PC =====
+  controls.addEventListener('mousedown', (e)=>{
+    startDrag(e.clientX, e.clientY);
+    e.preventDefault();
   });
 
+  document.addEventListener('mousemove', (e)=>{
+    moveDrag(e.clientX, e.clientY);
+  });
+
+  document.addEventListener('mouseup', endDrag);
+
+  // ===== Mobile =====
+  controls.addEventListener('touchstart', (e)=>{
+    const t = e.touches[0];
+    startDrag(t.clientX, t.clientY);
+    e.preventDefault(); // ⭐ 중요
+  }, { passive:false });
+
+  document.addEventListener('touchmove', (e)=>{
+    if (!isDragging) return;
+    const t = e.touches[0];
+    moveDrag(t.clientX, t.clientY);
+    e.preventDefault();
+  }, { passive:false });
+
+  document.addEventListener('touchend', endDrag);
+
   // ☰ 토글 클릭과 드래그 충돌 방지
-  toggleBtn.addEventListener('click', (e) => {
+  toggleBtn.addEventListener('click', (e)=>{
     if (moved) {
       e.stopImmediatePropagation();
       moved = false;
     }
   });
 })();
+
 
 
 /** ===== 라벨 도우미 ===== */
