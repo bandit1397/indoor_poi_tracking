@@ -11,12 +11,20 @@
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
   /* Controls */
   #controls {
-    position: fixed; top:10px; left:10px;
-    background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%); /* 중앙 정렬 */
+    background: rgba(255,255,255,0.95);
+    padding: 10px;
+    border-radius: 10px;
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    backdrop-filter: saturate(1.2) blur(4px);
     max-width: calc(100vw - 20px);
     transition: width 220ms ease, height 220ms ease, padding 220ms ease;
-  }
+}
+
   #controls .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center; }
   select, button, input { margin:0; padding:8px 10px; border-radius:8px; border:1px solid #ddd; font-size:14px; }
   button { background:#0ea5e9; color:white; border:none; cursor:pointer; }
@@ -58,9 +66,13 @@
   }
   
   @media (max-width: 640px) {
-    #controls { right:10px; left:10px; }
+    #controls {
+        left: 50%;
+        transform: translateX(-50%);
+    }
     select, input { min-width: 140px; }
-  }
+}
+
 </style>
 </head>
 <body>
@@ -77,6 +89,7 @@
     <strong>층간 길안내</strong>
     <button id="downloadBtn" class="secondary" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
     <button id="resetBtn" class="warn" title="경로 및 상태 초기화">초기화</button>
+    <button id="stopBlinkBtn" class="secondary" title="강조 해제">깜빡임 해제</button>
   </div>
 
   <!-- 3️⃣ 출발지/목적지/길찾기 -->
@@ -167,6 +180,7 @@ let edges = {};
 let nodeNames = [];  
 let blinkNode = null;
 let blinkInterval = null;
+let blinkPersistent = false;
 let pathNodes = [];
 let selectingMode = null;  
 let addingNodeMode = false;
@@ -322,6 +336,8 @@ function bindUI(){
     // update tooltip/title
     toggleBtn.title = isCollapsed ? '컨트롤 펼치기' : '컨트롤 접기';
   });
+
+  document.getElementById('stopBlinkBtn').addEventListener('click', stopBlink);
 
   // close search results when clicking elsewhere
   document.addEventListener('click', (e)=>{
@@ -518,18 +534,29 @@ function highlightNode(name=null){
 
   if(blinkInterval) clearInterval(blinkInterval);
   blinkNode = nodeToBlink;
+  blinkPersistent = true; // 이제 계속 깜빡임
 
   let opacity = 0.2;
   let growing = true;
 
-  blinkInterval=setInterval(()=>{
+  blinkInterval = setInterval(()=>{
     if(growing){ opacity += 0.1; if(opacity >= 0.85) growing = false; } 
     else { opacity -= 0.1; if(opacity <= 0.2) growing = true; }
     draw(opacity);
-  },100);
-
-  setTimeout(()=>{ clearInterval(blinkInterval); blinkInterval=null; blinkNode=null; draw(); },3000);
+  }, 100);
 }
+
+function stopBlink(){
+  if(blinkInterval){
+    clearInterval(blinkInterval);
+    blinkInterval = null;
+  }
+  blinkNode = null;
+  blinkPersistent = false;
+  draw();
+}
+
+
 
 /** ===== 초기화 ===== */
 function resetAll(skipConfirm=false){
@@ -649,10 +676,10 @@ function draw(opacity=1){
     const d = getNodeDisplayCoords(n);
     if(!d) return;
     let radius = 9;
-    if(n===blinkNode) radius = 14;
+    if(n===blinkNode) radius = 9 * 2; // 18px
     ctx.beginPath();
     ctx.arc(d.x,d.y,radius,0,Math.PI*2);
-    if(n===blinkNode){ ctx.fillStyle=`rgba(255,255,0,${opacity})`; }
+    if(n===blinkNode){ ctx.fillStyle=`rgba(255,0,0,${opacity})`; }
     else if(pathNodes.includes(n)){ ctx.fillStyle='red'; }
     else {
       ctx.fillStyle = (node.type==='normal') ? '#2563eb'
