@@ -340,6 +340,8 @@ function bindUI(){
     toggleBtn.title = isCollapsed ? '컨트롤 펼치기' : '컨트롤 접기';
   });
 
+  document.getElementById('stopBlinkBtn').addEventListener('click', stopBlink);
+
   // close search results when clicking elsewhere
   document.addEventListener('click', (e)=>{
     if(!controls.contains(e.target)) searchResults.style.display='none';
