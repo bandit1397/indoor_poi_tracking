@@ -543,6 +543,17 @@ function highlightNode(name=null){
   }, 100);
 }
 
+function stopBlink(){
+  if(blinkInterval){
+    clearInterval(blinkInterval);
+    blinkInterval = null;
+  }
+  blinkNode = null;
+  blinkPersistent = false;
+  draw();
+}
+
+
 
 /** ===== 초기화 ===== */
 function resetAll(skipConfirm=false){
