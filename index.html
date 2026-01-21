@@ -531,18 +531,18 @@ function highlightNode(name=null){
 
   if(blinkInterval) clearInterval(blinkInterval);
   blinkNode = nodeToBlink;
+  blinkPersistent = true; // 이제 계속 깜빡임
 
   let opacity = 0.2;
   let growing = true;
 
-  blinkInterval=setInterval(()=>{
+  blinkInterval = setInterval(()=>{
     if(growing){ opacity += 0.1; if(opacity >= 0.85) growing = false; } 
     else { opacity -= 0.1; if(opacity <= 0.2) growing = true; }
     draw(opacity);
-  },100);
-
-  setTimeout(()=>{ clearInterval(blinkInterval); blinkInterval=null; blinkNode=null; draw(); },3000);
+  }, 100);
 }
+
 
 /** ===== 초기화 ===== */
 function resetAll(skipConfirm=false){
