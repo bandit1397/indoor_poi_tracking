@@ -89,9 +89,6 @@
     <strong>층간 길안내</strong>
     <button id="downloadBtn" class="secondary" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
     <button id="resetBtn" class="warn" title="경로 및 상태 초기화">초기화</button>
-  </div>
-
-  <div class="row">
     <button id="stopBlinkBtn" class="secondary" title="강조 해제">깜빡임 해제</button>
   </div>
 
@@ -679,10 +676,10 @@ function draw(opacity=1){
     const d = getNodeDisplayCoords(n);
     if(!d) return;
     let radius = 9;
-    if(n===blinkNode) radius = 14;
+    if(n===blinkNode) radius = 9 * 2; // 18px
     ctx.beginPath();
     ctx.arc(d.x,d.y,radius,0,Math.PI*2);
-    if(n===blinkNode){ ctx.fillStyle=`rgba(255,255,0,${opacity})`; }
+    if(n===blinkNode){ ctx.fillStyle=`rgba(255,0,0,${opacity})`; }
     else if(pathNodes.includes(n)){ ctx.fillStyle='red'; }
     else {
       ctx.fillStyle = (node.type==='normal') ? '#2563eb'
