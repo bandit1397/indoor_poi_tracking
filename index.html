@@ -332,6 +332,7 @@ function loadLocations(){
 
   // ===== Mobile =====
   controls.addEventListener('touchstart', (e)=>{
+    e.stopPropagation(); 
     const t = e.touches[0];
     startDrag(t.clientX, t.clientY);
     e.preventDefault(); // ⭐ 중요
