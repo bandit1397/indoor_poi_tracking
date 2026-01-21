@@ -272,6 +272,60 @@ function loadLocations(){
   controls.classList.add('collapsed');
 })();
 
+/** ===== 컨트롤 패널 드래그 이동 ===== */
+(function enableControlsDrag(){
+  let isDragging = false;
+  let startX = 0, startY = 0;
+  let origLeft = 0, origTop = 0;
+  let moved = false;
+
+  controls.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    moved = false;
+    controls.classList.add('dragging');
+
+    const rect = controls.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    origLeft = rect.left;
+    origTop = rect.top;
+
+    // fixed + 중앙정렬 해제 → 픽셀 이동
+    controls.style.left = rect.left + 'px';
+    controls.style.top = rect.top + 'px';
+    controls.style.transform = 'none';
+
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+
+    controls.style.left = (origLeft + dx) + 'px';
+    controls.style.top = (origTop + dy) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    controls.classList.remove('dragging');
+  });
+
+  // ☰ 토글 클릭과 드래그 충돌 방지
+  toggleBtn.addEventListener('click', (e) => {
+    if (moved) {
+      e.stopImmediatePropagation();
+      moved = false;
+    }
+  });
+})();
+
+
 /** ===== 라벨 도우미 ===== */
 function getLabel(fullName){
   // Prefer explicit stored label for robustness. If missing, fall back to original behaviour.
