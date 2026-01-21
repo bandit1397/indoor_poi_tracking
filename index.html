@@ -31,10 +31,14 @@
     height 220ms ease,
     padding 220ms ease;
 
-  /* 드래그 가능 UX 표시 */
+  /* ===== 드래그 UX ===== */
   cursor: grab;
+
+  /* ⭐ 모바일 필수: 터치 제스처 차단 (없으면 이동 안 됨) */
+  touch-action: none;
 }
 
+/* 드래그 중 커서 변경 */
 #controls.dragging {
   cursor: grabbing;
 }
