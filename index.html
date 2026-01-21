@@ -356,7 +356,9 @@ function loadLocations(){
   });
 })();
 
-
+toggleBtn.addEventListener('touchstart', (e)=>{
+  e.stopPropagation(); // 드래그 시작 막기
+}, { passive:true });
 
 /** ===== 라벨 도우미 ===== */
 function getLabel(fullName){
