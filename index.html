@@ -679,7 +679,7 @@ function draw(opacity=1){
     if(n===blinkNode) radius = 14;
     ctx.beginPath();
     ctx.arc(d.x,d.y,radius,0,Math.PI*2);
-    if(n===blinkNode){ ctx.fillStyle=`rgba(255,255,0,${opacity})`; }
+    if(n===blinkNode){ ctx.fillStyle=`rgba(255,0,0,${opacity})`; }
     else if(pathNodes.includes(n)){ ctx.fillStyle='red'; }
     else {
       ctx.fillStyle = (node.type==='normal') ? '#2563eb'
