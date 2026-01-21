@@ -91,6 +91,10 @@
     <button id="resetBtn" class="warn" title="경로 및 상태 초기화">초기화</button>
   </div>
 
+  <div class="row">
+    <button id="stopBlinkBtn" class="secondary" title="강조 해제">깜빡임 해제</button>
+  </div>
+
   <!-- 3️⃣ 출발지/목적지/길찾기 -->
   <div class="row">
     출발지: <select id="start" title="출발지 선택(캔버스에서 노드를 클릭해도 됩니다)"></select>
@@ -179,6 +183,7 @@ let edges = {};
 let nodeNames = [];  
 let blinkNode = null;
 let blinkInterval = null;
+let blinkPersistent = false;
 let pathNodes = [];
 let selectingMode = null;  
 let addingNodeMode = false;
@@ -334,6 +339,8 @@ function bindUI(){
     // update tooltip/title
     toggleBtn.title = isCollapsed ? '컨트롤 펼치기' : '컨트롤 접기';
   });
+
+  document.getElementById('stopBlinkBtn').addEventListener('click', stopBlink);
 
   // close search results when clicking elsewhere
   document.addEventListener('click', (e)=>{
@@ -530,18 +537,29 @@ function highlightNode(name=null){
 
   if(blinkInterval) clearInterval(blinkInterval);
   blinkNode = nodeToBlink;
+  blinkPersistent = true; // 이제 계속 깜빡임
 
   let opacity = 0.2;
   let growing = true;
 
-  blinkInterval=setInterval(()=>{
+  blinkInterval = setInterval(()=>{
     if(growing){ opacity += 0.1; if(opacity >= 0.85) growing = false; } 
     else { opacity -= 0.1; if(opacity <= 0.2) growing = true; }
     draw(opacity);
-  },100);
-
-  setTimeout(()=>{ clearInterval(blinkInterval); blinkInterval=null; blinkNode=null; draw(); },3000);
+  }, 100);
 }
+
+function stopBlink(){
+  if(blinkInterval){
+    clearInterval(blinkInterval);
+    blinkInterval = null;
+  }
+  blinkNode = null;
+  blinkPersistent = false;
+  draw();
+}
+
+
 
 /** ===== 초기화 ===== */
 function resetAll(skipConfirm=false){
