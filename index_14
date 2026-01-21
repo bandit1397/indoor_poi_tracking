@@ -1,69 +1,137 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>🏬 다층 백화점 길안내 (층간 이동 자동 연결)</title>
+<title>🏬 다층 백화점 길안내 (수정본) — 상대좌표 지원</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <style>
-  body { margin:0; overflow:hidden; font-family:sans-serif; }
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; overflow:hidden; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
+  /* Controls */
   #controls {
-    position: fixed; top:10px; left:10px;
-    background: rgba(255,255,255,0.95); padding:10px; border-radius:6px; z-index:10;
+    position: fixed; top:10px; left:50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
+    max-width: calc(100vw - 20px);
+    transition: width 220ms ease, height 220ms ease, padding 220ms ease;
   }
-  select, button, input { margin:2px; }
+  #controls .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center; }
+  select, button, input { margin:0; padding:8px 10px; border-radius:8px; border:1px solid #ddd; font-size:14px; }
+  button { background:#0ea5e9; color:white; border:none; cursor:pointer; }
+  button.secondary { background:#64748b; }
+  button.warn { background:#ef4444; }
+  button:active { transform: translateY(1px); }
   #infoBox {
     position: absolute;
-    background: rgba(0,0,0,0.7); color:#fff; padding:5px 10px; border-radius:6px; font-weight:bold;
-    display:none; pointer-events:none; white-space: nowrap;
+    background: rgba(0,0,0,0.7); color:#fff; padding:6px 10px; border-radius:8px; font-weight:600;
+    display:none; pointer-events:none; white-space: nowrap; z-index: 9;
   }
   #nodeDialog {
     display:none; position:fixed; top:50%; left:50%;
     transform:translate(-50%,-50%);
-    background:#fff; border:1px solid #ccc; padding:15px;
-    border-radius:8px; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    background:#fff; border:1px solid #e5e7eb; padding:16px;
+    border-radius:12px; z-index:1000; box-shadow:0 12px 30px rgba(0,0,0,0.25); width:min(92vw,420px);
   }
-  #nodeDialog h3 { margin:0 0 8px 0; font-size:16px; }
-  #nodeDialog .typeBtn { margin:2px; padding:3px 6px; cursor:pointer; }
+  #nodeDialog h3 { margin:0 0 10px 0; font-size:18px; }
+  #nodeDialog .typeBtn { margin:4px; padding:6px 10px; cursor:pointer; border:1px solid #ddd; border-radius:999px; background:#f8fafc; }
+  #nodeDialog label { display:block; margin-top:8px; }
   #searchResults {
-    position:absolute; background:#fff; border:1px solid #ccc;
-    display:none; z-index:10; max-height:200px; overflow-y:auto;
+    position:absolute; background:#fff; border:1px solid #e5e7eb; border-radius:8px;
+    display:none; z-index:10; max-height:220px; overflow-y:auto; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   }
+  #searchResults div { padding:6px 8px; cursor:pointer; }
   #searchResults div:hover { background:#eef; }
+
+  /* Toggle (small hamburger) button inside controls */
+  #toggleControlsBtn { display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px; padding:0; font-size:18px; background:transparent; color:#0f172a; border-radius:8px; border:1px solid transparent; cursor:pointer; }
+  #toggleControlsBtn:focus { outline:2px solid #cbd5e1; }
+
+  /* Collapsed style: hide most rows visually but keep DOM intact (functionality preserved) */
+  #controls.collapsed { width:56px; height:56px; padding:6px; overflow:visible; }
+  #controls.collapsed strong { display:none; }
+  #controls.collapsed .row { margin-top:4px; }
+  /* hide all */
+  #controls.collapsed .row:not(.toggleRow) {
+   display: none;
+  }
+  
+  @media (max-width: 640px) {
+  #controls {
+    left:50%;
+    right:auto;
+    transform: translateX(-50%);
+  }
+}
+
 </style>
 </head>
 <body>
 
-<div id="controls">
-  <div>
-    Floor plan 업로드: <input type="file" id="fileInput" accept="image/*">
+<div id="controls" role="region" aria-label="길안내 컨트롤">
+
+  <!-- 1️⃣ ☰ 버튼 전용 row -->
+  <div class="row toggleRow">
+    <button id="toggleControlsBtn" aria-expanded="true" title="컨트롤 접기/펼치기">☰</button>
   </div>
-  <div>
-    출발지: <select id="start"></select>
-    목적지: <select id="end"></select>
-    <button onclick="findPath()">길찾기</button>
-    <button onclick="resetAll()">초기화</button>
+
+  <!-- 2️⃣ 층간 길안내 + 다운로드/초기화 버튼 -->
+  <div class="row">
+    <strong>층간 길안내</strong>
+    <button id="downloadBtn" class="secondary" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
+    <button id="resetBtn" class="warn" title="경로 및 상태 초기화">초기화</button>
   </div>
-  <div style="position:relative;">
-    위치 검색: <input type="text" id="searchInput" autocomplete="off">
-    <button onclick="manualSearch()">검색</button>
+
+  <!-- 3️⃣ 출발지/목적지/길찾기 -->
+  <div class="row">
+    출발지: <select id="start" title="출발지 선택(캔버스에서 노드를 클릭해도 됩니다)"></select>
+    목적지: <select id="end" title="목적지 선택(캔버스에서 노드를 클릭해도 됩니다)"></select>
+    <button id="routeBtn" title="최단 경로 찾기">길찾기</button>
+  </div>
+
+  <!-- 4️⃣ 위치 검색 / 노드추가 -->
+  <div class="row" style="position:relative;">
+    위치 검색: <input type="text" id="searchInput" autocomplete="off" placeholder="예: 1번 계단 / 푸드코트">
+    <button id="searchBtn">검색</button>
     <button id="addNodeBtn">노드추가</button>
-    <div id="searchResults"></div>
+    <div id="searchResults" role="listbox" aria-label="검색 결과"></div>
   </div>
+
 </div>
 
 <div id="infoBox"></div>
-<canvas id="map"></canvas>
+<canvas id="map" aria-label="층간 지도 캔버스"></canvas>
 
-<div id="nodeDialog">
-  <h3>새 노드 추가</h3>
+<!-- 노드 입력 다이얼로그 -->
+<div id="nodeDialog" role="dialog" aria-modal="true" aria-labelledby="nodeDialogTitle">
+  <h3 id="nodeDialogTitle">새 노드 추가</h3>
   <div>
-    <label><input type="radio" name="floorType" value="지상" checked> 지상</label>
-    <label><input type="radio" name="floorType" value="지하"> 지하</label>
-    <input type="number" id="floorNumber" min="1" value="1" style="width:60px"> 층
+    <label>
+      <input type="radio" name="floorType" value="지상" checked> 지상
+    </label>
+    <label>
+      <input type="radio" name="floorType" value="지하"> 지하
+    </label>
+    <label>
+      층/구역:
+      <select id="floorNumber">
+        <option>1층 1구역</option>
+        <option>1층 2구역</option>
+        <option>1층 3구역</option>
+        <option>2층 1구역</option>
+        <option>2층 2구역</option>
+        <option>2층 3구역</option>
+        <option>3층 1구역</option>
+        <option>3층 2구역</option>
+        <option>3층 3구역</option>
+        <!-- 필요에 따라 확장 -->
+      </select>
+    </label>
   </div>
-  <div style="margin-top:8px;">
-    <label>노드 이름: <input type="text" id="nodeName" placeholder="예: 1번 계단 / 에스1 / 엘리1"></label>
-  </div>
+  <label>노드 이름:
+    <input type="text" id="nodeName" placeholder="예: 1번 계단 / 에스1 / 엘리1">
+  </label>
   <div style="margin-top:8px;">
     <span>노드 타입:</span><br>
     <button type="button" class="typeBtn" data-type="normal">normal</button>
@@ -71,12 +139,12 @@
     <button type="button" class="typeBtn" data-type="stairs">stairs</button>
     <button type="button" class="typeBtn" data-type="escalator">escalator</button>
   </div>
-  <div style="margin-top:8px;">
-    <label>참고사항: <input type="text" id="nodeNote"></label>
-  </div>
-  <div style="margin-top:10px; text-align:right;">
-    <button onclick="closeNodeDialog()">취소</button>
-    <button onclick="saveNode()">저장</button>
+  <label>참고사항:
+    <input type="text" id="nodeNote" placeholder="예: 출입구/화장실 방향 등">
+  </label>
+  <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
+    <button id="cancelNodeBtn" class="secondary">취소</button>
+    <button id="saveNodeBtn">저장</button>
   </div>
 </div>
 
@@ -84,70 +152,188 @@
 /** ===== 전역 상태 ===== */
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
-const fileInput = document.getElementById('fileInput');
+
 const searchInput = document.getElementById('searchInput');
 const infoBox = document.getElementById('infoBox');
 const startSel = document.getElementById('start');
 const endSel = document.getElementById('end');
 const addNodeBtn = document.getElementById('addNodeBtn');
 const searchResults = document.getElementById('searchResults');
+const routeBtn = document.getElementById('routeBtn');
+const resetBtn = document.getElementById('resetBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const toggleBtn = document.getElementById('toggleControlsBtn');
+const controls = document.getElementById('controls');
 
 let floorImg = null;
-let nodes = {};
-let edges = {};
-let nodeNames = [];
+let nodes = {};      // nodes should store normalized coords x,y in 0..1 if possible
+let edges = {};      
+let nodeNames = [];  
 let blinkNode = null;
 let blinkInterval = null;
 let pathNodes = [];
-let selectingMode = null;
+let selectingMode = null;  
 let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
 
+// helper: compatibility flags
+let imageLoaded = false;
+
+/** ===== 반응형 캔버스 ===== */
 function resizeCanvas(){
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const vh = Math.max(window.innerHeight, document.documentElement.clientHeight || 0);
+  const vw = Math.max(window.innerWidth, document.documentElement.clientWidth || 0);
+  canvas.width = vw;
+  canvas.height = vh;
   draw();
 }
 window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 300));
 
-fileInput.addEventListener('change',(e)=>{
-  const file = e.target.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = function(evt){
+/** ===== 이미지/JSON 자동 로드 ===== */
+function loadFloorImage(){
+  return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = ()=>{ 
-      floorImg = img; 
-      resetAll(true);
-      resizeCanvas();
-    };
-    img.src = evt.target.result;
-  };
-  reader.readAsDataURL(file);
-});
+    img.onload = () => { floorImg = img; imageLoaded = true; resolve(); };
+    img.onerror = reject;
+    img.src = 'floorplan.png'; // 같은 폴더에 배치
+  });
+}
 
-function getLabel(fullName){ 
+function loadLocations(){
+  return fetch('locations.json', { cache: 'no-store' })
+    .then(res => {
+      if(!res.ok) throw new Error('locations.json 로드 실패: ' + res.status);
+      return res.json();
+    })
+    .then(data => {
+      nodes = data.nodes || {};
+      edges = data.edges || {};
+      nodeNames = data.nodeNames || Object.keys(nodes);
+      // ensure edges keys exist
+      nodeNames.forEach(n => { edges[n] = edges[n] || []; });
+
+      // --- IMPORTANT FIX: ensure every node has an explicit 'label' property (the user-provided name)
+      // This makes type-based inter-floor linking reliable even when floor strings contain spaces.
+      nodeNames.forEach(n => {
+        if(!nodes[n].label){
+          // if node object contains floor, we can strip that prefix to recover label
+          if(nodes[n].floor){
+            const prefix = nodes[n].floor + ' ';
+            if(n.startsWith(prefix)) nodes[n].label = n.slice(prefix.length);
+            else nodes[n].label = n; // fallback
+          } else {
+            // fallback: take the last token
+            const parts = n.split(' ');
+            nodes[n].label = parts.slice(-1)[0] || n;
+          }
+        }
+      });
+
+    })
+    .catch(err => {
+      console.warn(err);
+      nodes = {};
+      edges = {};
+      nodeNames = [];
+    });
+}
+
+/** ===== 초기화 시퀀스 ===== */
+(async function init(){
+  await Promise.allSettled([loadFloorImage(), loadLocations()]);
+  bindUI();
+  resizeCanvas();
+  draw();
+  // ☰ 버튼만 보이도록 초기 상태에서 collapsed 적용
+  controls.classList.add('collapsed');
+})();
+
+/** ===== 라벨 도우미 ===== */
+function getLabel(fullName){
+  // Prefer explicit stored label for robustness. If missing, fall back to original behaviour.
+  if(nodes[fullName] && nodes[fullName].label) return nodes[fullName].label;
   const s = fullName.split(' ');
   return s.length > 1 ? s.slice(1).join(' ').trim() : fullName;
 }
 
-/** ===== 출발/목적지 선택 모드 ===== */
-startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); startSel.blur(); });
-endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); endSel.blur(); });
-function enterSelectingMode(mode){ selectingMode = mode; showInfo((mode==='start'?'출발':'목적지')+' 노드를 선택하세요.', 0); }
+/** ===== UI 바인딩 ===== */
+function bindUI(){
+  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); startSel.blur(); });
+  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); endSel.blur(); });
 
-/** ===== 노드추가 버튼 클릭 ===== */
-addNodeBtn.addEventListener('click',()=>{
-  const inputPwd = prompt("노드추가 비밀번호를 입력하세요:");
-  if(inputPwd === password){
-    showInfo('캔버스에서 노드를 추가할 위치를 클릭하세요.', 2000);
-    addingNodeMode = true;
-  } else {
-    alert("비밀번호 틀림. 노드추가 취소.");
-  }
-});
+  routeBtn.addEventListener('click', findPath);
+  resetBtn.addEventListener('click', ()=> resetAll(false));
+  downloadBtn.addEventListener('click', downloadJSON);
+  document.getElementById('searchBtn').addEventListener('click', manualSearch);
 
+  canvas.addEventListener('touchstart', (e) => {
+    const t = e.changedTouches[0];
+    const rect = canvas.getBoundingClientRect();
+    const x = t.clientX - rect.left;
+    const y = t.clientY - rect.top;
+    handleCanvasTap(x,y);
+  }, {passive:true});
+
+  canvas.addEventListener('click', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    handleCanvasTap(e.clientX - rect.left, e.clientY - rect.top);
+  });
+
+  addNodeBtn.addEventListener('click',()=>{
+    const inputPwd = prompt("노드추가 비밀번호를 입력하세요:");
+    if(inputPwd === password){
+      showInfo('캔버스에서 노드를 추가할 위치를 탭/클릭하세요.', 2000);
+      addingNodeMode = true;
+    } else {
+      alert("비밀번호 틀림. 노드추가 취소.");
+    }
+  });
+
+  searchInput.addEventListener('input', ()=>{
+    const query = searchInput.value;
+    const results = searchNodes(query);
+    searchResults.innerHTML='';
+    if(results.length>0){
+      searchResults.style.display='block';
+      results.forEach(r=>{
+        const div = document.createElement('div');
+        div.textContent = r.display;
+        div.addEventListener('click', ()=>{
+          searchInput.value = getLabel(r.fullName);
+          searchResults.style.display='none';
+          highlightNode(r.fullName);
+        });
+        searchResults.appendChild(div);
+      });
+    } else {
+      searchResults.style.display='none';
+    }
+  });
+
+  document.querySelectorAll('#nodeDialog .typeBtn').forEach(btn =>
+    btn.addEventListener('click',()=>{ selectedType=btn.dataset.type; })
+  );
+  document.getElementById('cancelNodeBtn').addEventListener('click', closeNodeDialog);
+  document.getElementById('saveNodeBtn').addEventListener('click', saveNode);
+
+  // Toggle controls collapse/expand
+  toggleBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const isCollapsed = controls.classList.toggle('collapsed');
+    toggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
+    // update tooltip/title
+    toggleBtn.title = isCollapsed ? '컨트롤 펼치기' : '컨트롤 접기';
+  });
+
+  // close search results when clicking elsewhere
+  document.addEventListener('click', (e)=>{
+    if(!controls.contains(e.target)) searchResults.style.display='none';
+  });
+}
+
+/** ===== 정보 토스트 ===== */
 let infoTimeout = null;
 function showInfo(text, ms=2000, x=null, y=null){
   if(infoTimeout){ clearTimeout(infoTimeout); infoTimeout=null; }
@@ -158,33 +344,52 @@ function showInfo(text, ms=2000, x=null, y=null){
     infoBox.style.top = (y-30) + 'px';
   } else {
     infoBox.style.left = '10px';
-    infoBox.style.top = (window.innerHeight-40)+'px';
+    infoBox.style.top = (window.innerHeight-48)+'px';
   }
   if(ms>0){
     infoTimeout = setTimeout(()=>{ infoBox.style.display='none'; infoTimeout=null; }, ms);
   }
 }
 
-/** ===== 마우스 인터랙션 ===== */
+/** ===== 선택 모드 ===== */
+function enterSelectingMode(mode){
+  selectingMode = mode;
+  showInfo((mode==='start'?'출발':'목적지')+' 노드를 캔버스에서 선택하세요.', 1800);
+}
+
+/** ===== 좌표 변환 유틸 ===== */
+function getNodeDisplayCoords(name){
+  const n = nodes[name];
+  if(!n) return null;
+  const hasNorm = (typeof n.x === 'number' && typeof n.y === 'number' && n.x<=1 && n.y<=1);
+  if(hasNorm){
+    return { x: n.x * canvas.width, y: n.y * canvas.height };
+  }
+  if(imageLoaded && floorImg && floorImg.width && floorImg.height){
+    return { x: (n.x / floorImg.width) * canvas.width, y: (n.y / floorImg.height) * canvas.height };
+  }
+  return { x: n.x, y: n.y };
+}
+
+function getNodeNormalizedCoordsFromCanvas(px,py){
+  return { x: px / canvas.width, y: py / canvas.height };
+
+}
+
+/** ===== 캔버스 탭/클릭 핸들러 ===== */
 let lastClickTime = 0;
-canvas.addEventListener('click',(e)=>{
+function handleCanvasTap(x,y){
   if(!floorImg) return;
-  const rect = canvas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
   const clickedNode = findNodeAt(x,y);
 
   if(selectingMode){
     if(clickedNode){
-      if(selectingMode === 'start'){
-        startSel.innerHTML = ''; 
-        const opt = document.createElement('option'); opt.value=clickedNode; opt.textContent=getLabel(clickedNode); startSel.appendChild(opt);
-        startSel.value = clickedNode;
-      } else if(selectingMode === 'end'){
-        endSel.innerHTML = '';
-        const opt = document.createElement('option'); opt.value=clickedNode; opt.textContent=getLabel(clickedNode); endSel.appendChild(opt);
-        endSel.value = clickedNode;
-      }
+      const sel = (selectingMode==='start') ? startSel : endSel;
+      sel.innerHTML='';
+      const opt = document.createElement('option');
+      opt.value = clickedNode; opt.textContent = getLabel(clickedNode);
+      sel.appendChild(opt);
+      sel.value = clickedNode;
       selectingMode = null;
       showInfo('선택 완료: ' + clickedNode, 1200);
       draw();
@@ -197,7 +402,7 @@ canvas.addEventListener('click',(e)=>{
 
   if(addingNodeMode){
     tempX = x; tempY = y;
-    openNodeDialog(x,y);
+    openNodeDialog();
     addingNodeMode = false;
     return;
   }
@@ -207,11 +412,7 @@ canvas.addEventListener('click',(e)=>{
     if(now - lastClickTime < 300){
       const inputPwd = prompt("노드 삭제 비밀번호를 입력하세요:");
       if(inputPwd === password){
-        delete nodes[clickedNode];
-        nodeNames = nodeNames.filter(nm=>nm!==clickedNode);
-        delete edges[clickedNode];
-        for(let key in edges) edges[key]=edges[key].filter(nm=>nm!==clickedNode);
-        pathNodes=[];
+        deleteNode(clickedNode);
         showInfo('노드 삭제 완료',1200,x,y);
         draw();
       } else {
@@ -222,23 +423,30 @@ canvas.addEventListener('click',(e)=>{
       showInfo(`${getLabel(clickedNode)} : ${n.note||'참고사항 없음'}`, 2000, x, y);
     }
     lastClickTime = now;
-    return;
   }
-});
+}
 
+/** ===== 유틸 ===== */
 function findNodeAt(x,y){
   for(let name of nodeNames){
-    const node = nodes[name];
-    if(Math.hypot(node.x-x,node.y-y)<=8) return name;
+    const d = getNodeDisplayCoords(name);
+    if(!d) continue;
+    if(Math.hypot(d.x-x,d.y-y)<=12) return name;
   }
   return null;
 }
 
-/** ===== 최단경로: Dijkstra ===== */
-function distance(n1,n2){ return Math.hypot(n1.x-n2.x,n1.y-n2.y); }
+/** ===== 그래프 연산: Dijkstra (display coords used for distance calc) ===== */
+function distanceByDisplay(aName,bName){
+  const a = getNodeDisplayCoords(aName);
+  const b = getNodeDisplayCoords(bName);
+  if(!a || !b) return Infinity;
+  return Math.hypot(a.x-b.x,a.y-b.y);
+}
+
 function dijkstra(start,end,allowedNodes=null){
   const visited=new Set(), distances={}, prev={};
-  const targetNodes = allowedNodes||nodeNames;
+  const targetNodes = allowedNodes || nodeNames.slice();
   targetNodes.forEach(n=>{ distances[n]=Infinity; });
   distances[start]=0;
 
@@ -254,18 +462,21 @@ function dijkstra(start,end,allowedNodes=null){
     const adj = edges[minNode]||[];
     for(let nb of adj){
       if(!targetNodes.includes(nb)) continue;
-      let alt = distances[minNode]+distance(nodes[minNode],nodes[nb]);
+      const alt = distances[minNode]+distanceByDisplay(minNode,nb);
       if(alt<distances[nb]) { distances[nb]=alt; prev[nb]=minNode; }
     }
   }
 
   const path=[]; let curr=end;
   while(curr){ path.unshift(curr); curr=prev[curr]; }
-  if(path[0]!==start) return []; 
+  if(path[0]!==start) return [];
   return path;
 }
 
-function multiFloorPath(startName,endName){ return dijkstra(startName,endName); }
+function multiFloorPath(startName,endName){
+  return dijkstra(startName,endName);
+}
+
 function findPath(){
   const s = startSel.value; const e = endSel.value;
   if(!s || !e){ alert('출발지/목적지를 선택하세요.'); return; }
@@ -274,9 +485,9 @@ function findPath(){
   draw();
 }
 
-/** ===== 검색 기능: 노드 이름/타입/참고사항 통합 ===== */
+/** ===== 검색 ===== */
 function normalize(str){
-  return str.replace(/\s+/g,'').replace(/[^\w가-힣]/g,'').toLowerCase();
+  return String(str||'').replace(/\s+/g,'').replace(/[^\w가-힣]/g,'').toLowerCase();
 }
 
 function searchNodes(query){
@@ -285,7 +496,7 @@ function searchNodes(query){
   const results=[];
   for(let name of nodeNames){
     const node = nodes[name];
-    const fields = [name, node.type, node.note||''];
+    const fields = [name, node.type, node.note||'', node.label||''];
     for(let f of fields){
       if(normalize(f).includes(q)){
         results.push({fullName:name, display:`${getLabel(name)} [${node.type}] ${node.note||''}`});
@@ -296,40 +507,17 @@ function searchNodes(query){
   return results;
 }
 
-searchInput.addEventListener('input', ()=>{
-  const query = searchInput.value;
-  const results = searchNodes(query);
-  searchResults.innerHTML='';
-  if(results.length>0){
-    searchResults.style.display='block';
-    results.forEach(r=>{
-      const div = document.createElement('div');
-      div.textContent = r.display;
-      div.style.padding='2px 5px';
-      div.style.cursor='pointer';
-      div.addEventListener('click', ()=>{
-        searchInput.value = getLabel(r.fullName);
-        searchResults.style.display='none';
-        highlightNode(r.fullName);
-      });
-      searchResults.appendChild(div);
-    });
-  } else {
-    searchResults.style.display='none';
-  }
-});
-
 function manualSearch(){
   const val = searchInput.value.trim();
-  if(!val){ alert('검색어 입력'); return; }
+  if(!val){ alert('검색어를 입력하세요.'); return; }
   const results = searchNodes(val);
   if(results.length>0) highlightNode(results[0].fullName);
-  else alert('노드 없음');
+  else alert('노드를 찾을 수 없습니다.');
 }
 
-/** ===== 노드 강조(blink) ===== */
+/** ===== 깜빡임 강조 ===== */
 function highlightNode(name=null){
-  const nodeToBlink = name||nodeNames.find(n=>getLabel(n)===searchInput.value);
+  const nodeToBlink = name || nodeNames.find(n=>getLabel(n)===searchInput.value);
   if(!nodeToBlink){ alert("노드 없음"); return; }
 
   if(blinkInterval) clearInterval(blinkInterval);
@@ -339,7 +527,7 @@ function highlightNode(name=null){
   let growing = true;
 
   blinkInterval=setInterval(()=>{
-    if(growing){ opacity += 0.1; if(opacity >= 0.8) growing = false; } 
+    if(growing){ opacity += 0.1; if(opacity >= 0.85) growing = false; } 
     else { opacity -= 0.1; if(opacity <= 0.2) growing = true; }
     draw(opacity);
   },100);
@@ -349,7 +537,7 @@ function highlightNode(name=null){
 
 /** ===== 초기화 ===== */
 function resetAll(skipConfirm=false){
-  if(!skipConfirm && !confirm("경로를 초기화하시겠습니까?")) return;
+  if(!skipConfirm && !confirm("경로 및 강조를 초기화하시겠습니까?")) return;
   pathNodes=[];
   if(blinkInterval){ clearInterval(blinkInterval); blinkInterval=null; }
   blinkNode=null;
@@ -363,9 +551,8 @@ function resetAll(skipConfirm=false){
 }
 
 /** ===== 노드 다이얼로그 ===== */
-function openNodeDialog(x,y){ document.getElementById('nodeDialog').style.display='block'; }
+function openNodeDialog(){ document.getElementById('nodeDialog').style.display='block'; }
 function closeNodeDialog(){ document.getElementById('nodeDialog').style.display='none'; }
-document.querySelectorAll('#nodeDialog .typeBtn').forEach(btn=>btn.addEventListener('click',()=>{ selectedType=btn.dataset.type; }));
 
 function addEdge(a,b){
   edges[a]=edges[a]||[]; edges[b]=edges[b]||[];
@@ -374,62 +561,248 @@ function addEdge(a,b){
 }
 
 function saveNode(){
-  const name=document.getElementById('nodeName').value.trim();
-  const floor=document.querySelector('input[name="floorType"]:checked').value+document.getElementById('floorNumber').value+'층';
-  const note=document.getElementById('nodeNote').value;
-  if(!name){ alert("노드 이름 입력"); return; }
-  const fullName=`${floor} ${name}`;
-  if(nodes[fullName]){ alert("이미 존재"); return; }
+  const name = document.getElementById('nodeName').value.trim();
+  const floorType = document.querySelector('input[name="floorType"]:checked').value;
+  const floor = floorType + ' ' + document.getElementById('floorNumber').value; // 선택된 구역 포함
+  const note = document.getElementById('nodeNote').value;
+  
+  if(!name){ alert("노드 이름을 입력하세요."); return; }
+  const fullName = `${floor} ${name}`;
+  if(nodes[fullName]){ alert("이미 존재하는 노드입니다."); return; }
 
-  nodes[fullName]={x:tempX,y:tempY,floor,type:selectedType,note};
+  // 캔버스 좌표를 정규화
+  const norm = getNodeNormalizedCoordsFromCanvas(tempX, tempY);
+  // store label (the pure node name) explicitly — this is the key fix for robust inter-floor matching
+  nodes[fullName] = { x: Number(norm.x.toFixed(6)), y: Number(norm.y.toFixed(6)), floor, type:selectedType, note, label: name };
   nodeNames.push(fullName);
 
-  nodeNames.forEach(n=>{
-    if(n!==fullName && nodes[n].floor===floor){ addEdge(n, fullName); }
+  // 같은 층(구역 단위) 자동 연결 (unchanged behaviour)
+  nodeNames.forEach(n => {
+    if(n!==fullName && nodes[n].floor===floor){
+      addEdge(n, fullName);
+    }
   });
 
+  // 타입별 층간 연결 — now uses explicit 'label' property to compare node identity across floors
   if(selectedType==='escalator' || selectedType==='stairs' || selectedType==='elevator'){
     for(let n of nodeNames){
       if(n===fullName) continue;
-      if(nodes[n].type===selectedType && getLabel(n)===getLabel(fullName)){
+      if(nodes[n].type===selectedType && (nodes[n].label||getLabel(n)) === name){
         addEdge(n, fullName);
       }
     }
   }
 
   closeNodeDialog(); draw();
+  draw();
+  document.getElementById('nodeName').value='';
+  document.getElementById('nodeNote').value='';
+  showNodeJson(fullName);  
+}
+
+function deleteNode(name){
+  delete nodes[name];
+  nodeNames = nodeNames.filter(nm=>nm!==name);
+  delete edges[name];
+  for(let key in edges){ edges[key]=edges[key].filter(nm=>nm!==name); }
+  pathNodes=[];
+}
+
+/** ===== JSON 다운로드 ===== */
+function downloadJSON(){
+  const data = { nodes, edges, nodeNames };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'locations.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showInfo('locations.json 다운로드 완료', 1400);
 }
 
 /** ===== 그리기 ===== */
-function draw(opacity=1){
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  if(floorImg) ctx.drawImage(floorImg,0,0,canvas.width,canvas.height);
+function draw(opacity = 1) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if(pathNodes.length>1){
-    ctx.strokeStyle='red'; ctx.lineWidth=4;
+  // ===============================
+  // 1️⃣ 지도 이미지 비율 유지 렌더링 (contain)
+  // ===============================
+  let mapOffsetX = 0;
+  let mapOffsetY = 0;
+  let mapDrawWidth = canvas.width;
+  let mapDrawHeight = canvas.height;
+  let scaleX = 1;
+  let scaleY = 1;
+
+  if (floorImg) {
+    const imgRatio = floorImg.width / floorImg.height;
+    const canvasRatio = canvas.width / canvas.height;
+
+    if (canvasRatio > imgRatio) {
+      // 캔버스가 더 넓음 → 높이에 맞춤
+      mapDrawHeight = canvas.height;
+      mapDrawWidth = mapDrawHeight * imgRatio;
+      mapOffsetX = (canvas.width - mapDrawWidth) / 2;
+      mapOffsetY = 0;
+    } else {
+      // 캔버스가 더 높음 → 너비에 맞춤
+      mapDrawWidth = canvas.width;
+      mapDrawHeight = mapDrawWidth / imgRatio;
+      mapOffsetX = 0;
+      mapOffsetY = (canvas.height - mapDrawHeight) / 2;
+    }
+
+    scaleX = mapDrawWidth / canvas.width;
+    scaleY = mapDrawHeight / canvas.height;
+
+    ctx.drawImage(
+      floorImg,
+      mapOffsetX,
+      mapOffsetY,
+      mapDrawWidth,
+      mapDrawHeight
+    );
+  }
+
+  // ===============================
+  // 2️⃣ 경로 그리기 (지도 기준 좌표 보정)
+  // ===============================
+  if (pathNodes.length > 1) {
+    ctx.strokeStyle = 'red';
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
     ctx.beginPath();
-    pathNodes.forEach((n,i)=>{
-      const node=nodes[n];
-      if(i===0) ctx.moveTo(node.x,node.y);
-      else ctx.lineTo(node.x,node.y);
+
+    pathNodes.forEach((n, i) => {
+      const d = getNodeDisplayCoords(n);
+      if (!d) return;
+
+      const x = mapOffsetX + d.x * scaleX;
+      const y = mapOffsetY + d.y * scaleY;
+
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
     });
+
     ctx.stroke();
   }
 
-  nodeNames.forEach(n=>{
-    const node=nodes[n];
-    let radius = 8;
-    if(n===blinkNode) radius = 14;
+  // ===============================
+  // 3️⃣ 노드 + 라벨 그리기 (지도 기준 좌표 보정)
+  // ===============================
+  ctx.font = '12px system-ui';
+  ctx.textBaseline = 'middle';
+
+  nodeNames.forEach(n => {
+    const node = nodes[n];
+    if (!node) return;
+
+    const d = getNodeDisplayCoords(n);
+    if (!d) return;
+
+    const x = mapOffsetX + d.x * scaleX;
+    const y = mapOffsetY + d.y * scaleY;
+
+    let radius = 9;
+    if (n === blinkNode) radius = 14;
+
     ctx.beginPath();
-    ctx.arc(node.x,node.y,radius,0,Math.PI*2);
-    if(n===blinkNode){ ctx.fillStyle=`rgba(255,255,0,${opacity})`; } 
-    else if(pathNodes.includes(n)){ ctx.fillStyle='red'; } 
-    else { ctx.fillStyle=node.type==='normal'?'blue':(node.type==='stairs'?'orange':node.type==='elevator'?'green':'purple'); }
-    ctx.fill(); ctx.strokeStyle='#000'; ctx.stroke();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+
+    if (n === blinkNode) {
+      ctx.fillStyle = `rgba(255,255,0,${opacity})`;
+    } else if (pathNodes.includes(n)) {
+      ctx.fillStyle = 'red';
+    } else {
+      ctx.fillStyle =
+        node.type === 'normal' ? '#2563eb' :
+        node.type === 'stairs' ? '#f59e0b' :
+        node.type === 'elevator' ? '#16a34a' :
+        '#9333ea';
+    }
+
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.stroke();
+
+    // 라벨
+    ctx.fillStyle = 'black';
+    ctx.fillText(getLabel(n), x + radius + 6, y);
   });
 }
 
-resizeCanvas();
+
+/** ===== 접근성 보완: 셀렉트 직접 선택 지원(옵션 목록 채우기) ===== */
+function refreshSelectOptions(){
+  const makeOptions = (sel) => {
+    const curr = sel.value;
+    sel.innerHTML = '<option value="">(캔버스에서 선택 가능)</option>';
+    nodeNames.forEach(n=>{
+      const opt = document.createElement('option');
+      opt.value = n; opt.textContent = getLabel(n);
+      sel.appendChild(opt);
+    });
+    if(curr && nodeNames.includes(curr)) sel.value = curr;
+  };
+  makeOptions(startSel);
+  makeOptions(endSel);
+}
+setInterval(refreshSelectOptions, 1500);
+
+function showNodeJson(fullName){
+  const obj = {};
+  obj[fullName] = nodes[fullName];
+
+  const text = JSON.stringify(obj, null, 2)
+    .replace(/^{\n/, '')
+    .replace(/\n}$/, '');
+
+  const panel = document.getElementById('nodeJsonPanel');
+  const ta = document.getElementById('nodeJsonOutput');
+  ta.value = text;
+  panel.style.display = 'block';
+  ta.select();
+}
+
+function copyNodeJson(){
+  const ta = document.getElementById('nodeJsonOutput');
+  ta.select();
+  document.execCommand('copy');
+  alert('JSON 복사 완료 → locations.json에 붙여넣으세요');
+}
+
+function closeNodeJson(){
+  document.getElementById('nodeJsonPanel').style.display = 'none';
+}
+
 </script>
+<!-- 🔽 노드 JSON 출력 패널 -->
+<div id="nodeJsonPanel" style="
+  position:fixed;
+  bottom:10px;
+  right:10px;
+  width:min(92vw,420px);
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  padding:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.2);
+  display:none;
+  z-index:2000;
+">
+  <strong>📌 새 노드 JSON</strong>
+  <textarea id="nodeJsonOutput"
+    style="width:100%;height:160px;margin-top:6px;font-family:monospace;font-size:12px;"
+    readonly></textarea>
+  <div style="text-align:right;margin-top:6px;">
+    <button onclick="copyNodeJson()" class="secondary">복사</button>
+    <button onclick="closeNodeJson()" class="warn">닫기</button>
+  </div>
+</div>
+
 </body>
 </html>
