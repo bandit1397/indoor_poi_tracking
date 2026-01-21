@@ -11,38 +11,12 @@
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
   /* Controls */
   #controls {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-
-  background: rgba(255, 255, 255, 0.95);
-  padding: 10px;
-  border-radius: 10px;
-  z-index: 10;
-
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  backdrop-filter: saturate(1.2) blur(4px);
-
-  max-width: calc(100vw - 20px);
-
-  transition:
-    width 220ms ease,
-    height 220ms ease,
-    padding 220ms ease;
-
-  /* ===== 드래그 UX ===== */
-  cursor: grab;
-
-  /* ⭐ 모바일 필수: 터치 제스처 차단 (없으면 이동 안 됨) */
-  touch-action: none;
-}
-
-/* 드래그 중 커서 변경 */
-#controls.dragging {
-  cursor: grabbing;
-}
-
+    position: fixed; top:10px; left:50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
+    max-width: calc(100vw - 20px);
+    transition: width 220ms ease, height 220ms ease, padding 220ms ease;
+  }
   #controls .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center; }
   select, button, input { margin:0; padding:8px 10px; border-radius:8px; border:1px solid #ddd; font-size:14px; }
   button { background:#0ea5e9; color:white; border:none; cursor:pointer; }
@@ -275,90 +249,6 @@ function loadLocations(){
   // ☰ 버튼만 보이도록 초기 상태에서 collapsed 적용
   controls.classList.add('collapsed');
 })();
-
-/** ===== 컨트롤 패널 드래그 이동 ===== */
-/** ===== 컨트롤 패널 드래그 이동 (PC + Mobile) ===== */
-(function enableControlsDrag(){
-  let isDragging = false;
-  let startX = 0, startY = 0;
-  let origLeft = 0, origTop = 0;
-  let moved = false;
-
-  function startDrag(x, y){
-    isDragging = true;
-    moved = false;
-    controls.classList.add('dragging');
-
-    const rect = controls.getBoundingClientRect();
-    startX = x;
-    startY = y;
-    origLeft = rect.left;
-    origTop = rect.top;
-
-    controls.style.left = rect.left + 'px';
-    controls.style.top = rect.top + 'px';
-    controls.style.transform = 'none';
-  }
-
-  function moveDrag(x, y){
-    if (!isDragging) return;
-
-    const dx = x - startX;
-    const dy = y - startY;
-
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
-
-    controls.style.left = (origLeft + dx) + 'px';
-    controls.style.top = (origTop + dy) + 'px';
-  }
-
-  function endDrag(){
-    if (!isDragging) return;
-    isDragging = false;
-    controls.classList.remove('dragging');
-  }
-
-  // ===== PC =====
-  controls.addEventListener('mousedown', (e)=>{
-    startDrag(e.clientX, e.clientY);
-    e.preventDefault();
-  });
-
-  document.addEventListener('mousemove', (e)=>{
-    moveDrag(e.clientX, e.clientY);
-  });
-
-  document.addEventListener('mouseup', endDrag);
-
-  // ===== Mobile =====
-  controls.addEventListener('touchstart', (e)=>{
-    e.stopPropagation(); 
-    const t = e.touches[0];
-    startDrag(t.clientX, t.clientY);
-    e.preventDefault(); // ⭐ 중요
-  }, { passive:false });
-
-  document.addEventListener('touchmove', (e)=>{
-    if (!isDragging) return;
-    const t = e.touches[0];
-    moveDrag(t.clientX, t.clientY);
-    e.preventDefault();
-  }, { passive:false });
-
-  document.addEventListener('touchend', endDrag);
-
-  // ☰ 토글 클릭과 드래그 충돌 방지
-  toggleBtn.addEventListener('click', (e)=>{
-    if (moved) {
-      e.stopImmediatePropagation();
-      moved = false;
-    }
-  });
-})();
-
-toggleBtn.addEventListener('touchstart', (e)=>{
-  e.stopPropagation(); // 드래그 시작 막기
-}, { passive:true });
 
 /** ===== 라벨 도우미 ===== */
 function getLabel(fullName){
