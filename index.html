@@ -221,9 +221,14 @@ let blinkNode = null;
 let blinkInterval = null;
 let blinkPersistent = false;
 let pathNodes = [];
-let selectingMode = null;  
+
+let selectingMode = null;        // 캔버스에서 출발/도착 선택
+let selectDropdownOpen = null;   // 출발/도착 select 펼침 상태
 let addingNodeMode = false;
-let tempX=0, tempY=0, selectedType='normal';
+
+let tempX = 0, tempY = 0;
+let selectedType = 'normal';
+
 let password = 'knp123';
 
 // helper: compatibility flags
