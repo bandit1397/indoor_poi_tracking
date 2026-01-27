@@ -312,6 +312,17 @@ function getLabel(fullName){
 function bindUI(){
   startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); });
   endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); });
+  startSel.addEventListener('change', ()=>{
+    selectPending = null;
+    selectingMode = null;
+    startSel.blur();
+  });
+
+  endSel.addEventListener('change', ()=>{
+    selectPending = null;
+    selectingMode = null;
+    endSel.blur();
+  });
 
   routeBtn.addEventListener('click', findPath);
   resetBtn.addEventListener('click', ()=> resetAll(false));
