@@ -353,9 +353,16 @@ function bindUI(){
   });
 
   searchInput.addEventListener('input', ()=>{
+    const rect = searchInput.getBoundingClientRect();
+
+    searchResults.style.left = rect.left + 'px';
+    searchResults.style.top  = (rect.bottom + 4) + 'px'; // 입력창 바로 아래
+    searchResults.style.minWidth = rect.width + 'px';
+
     const query = searchInput.value;
     const results = searchNodes(query);
     searchResults.innerHTML='';
+
     if(results.length>0){
       searchResults.style.display='block';
       results.forEach(r=>{
@@ -372,6 +379,7 @@ function bindUI(){
       searchResults.style.display='none';
     }
   });
+
 
   document.querySelectorAll('#nodeDialog .typeBtn').forEach(btn =>
     btn.addEventListener('click',()=>{
