@@ -486,14 +486,22 @@ function handleCanvasTap(x,y){
 
   if(selectingMode){
     if(clickedNode){
-      const sel = (selectingMode==='start') ? startSel : endSel;
-      sel.innerHTML='';
+      const sel = (selectingMode === 'start') ? startSel : endSel;
+
+      // 선택값 반영
+      sel.innerHTML = '';
       const opt = document.createElement('option');
-      opt.value = clickedNode; opt.textContent = getLabel(clickedNode);
+      opt.value = clickedNode;
+      opt.textContent = getLabel(clickedNode);
       sel.appendChild(opt);
       sel.value = clickedNode;
+
+      // 🔑 드롭다운 & 선택모드 종료
       selectingMode = null;
-      showInfo('선택 완료: ' + clickedNode, 1200);
+      selectDropdownOpen = null;
+      sel.blur();
+
+      showInfo('선택 완료: ' + getLabel(clickedNode), 1200);
       draw();
       return;
     } else {
