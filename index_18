@@ -221,7 +221,8 @@ let blinkNode = null;
 let blinkInterval = null;
 let blinkPersistent = false;
 let pathNodes = [];
-let selectingMode = null;  
+let selectingMode = null; 
+let selectPending = null;   // ← ✅ 바로 여기!
 let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
@@ -309,8 +310,19 @@ function getLabel(fullName){
 
 /** ===== UI 바인딩 ===== */
 function bindUI(){
-  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); startSel.blur(); });
-  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); endSel.blur(); });
+  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); });
+  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); });
+  startSel.addEventListener('change', ()=>{
+    selectPending = null;
+    selectingMode = null;
+    startSel.blur();
+  });
+
+  endSel.addEventListener('change', ()=>{
+    selectPending = null;
+    selectingMode = null;
+    endSel.blur();
+  });
 
   routeBtn.addEventListener('click', findPath);
   resetBtn.addEventListener('click', ()=> resetAll(false));
@@ -442,12 +454,20 @@ function handleCanvasTap(x,y){
   if(selectingMode){
     if(clickedNode){
       const sel = (selectingMode==='start') ? startSel : endSel;
-      sel.innerHTML='';
+
+      // 선택된 노드만 option으로 설정
+      sel.innerHTML = '';
       const opt = document.createElement('option');
-      opt.value = clickedNode; opt.textContent = getLabel(clickedNode);
+      opt.value = clickedNode;
+      opt.textContent = getLabel(clickedNode);
       sel.appendChild(opt);
       sel.value = clickedNode;
+
+      // ✅ 선택 확정 처리 (여기가 핵심)
       selectingMode = null;
+      selectPending = null;     // ← 추가
+      sel.blur();               // ← 추가 (이 순간에만 닫힘)
+
       showInfo('선택 완료: ' + clickedNode, 1200);
       draw();
       return;
@@ -458,7 +478,8 @@ function handleCanvasTap(x,y){
   }
 
   if(addingNodeMode){
-    tempX = x; tempY = y;
+    tempX = x;
+    tempY = y;
     openNodeDialog();
     addingNodeMode = false;
     return;
@@ -482,6 +503,7 @@ function handleCanvasTap(x,y){
     lastClickTime = now;
   }
 }
+
 
 /** ===== 유틸 ===== */
 function findNodeAt(x,y){
@@ -745,7 +767,7 @@ function draw(opacity=1){
 function refreshSelectOptions(){
   const makeOptions = (sel) => {
     const curr = sel.value;
-    sel.innerHTML = '<option value="">(캔버스에서 선택 가능)</option>';
+    sel.innerHTML = '<option value="" disabled selected>(캔버스에서 선택 가능)</option>';
     nodeNames.forEach(n=>{
       const opt = document.createElement('option');
       opt.value = n; opt.textContent = getLabel(n);
