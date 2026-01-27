@@ -221,14 +221,9 @@ let blinkNode = null;
 let blinkInterval = null;
 let blinkPersistent = false;
 let pathNodes = [];
-
-let selectingMode = null;        // 캔버스에서 출발/도착 선택
-let selectDropdownOpen = null;   // 출발/도착 select 펼침 상태
+let selectingMode = null;  
 let addingNodeMode = false;
-
-let tempX = 0, tempY = 0;
-let selectedType = 'normal';
-
+let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
 
 // helper: compatibility flags
@@ -312,50 +307,10 @@ function getLabel(fullName){
   return s.length > 1 ? s.slice(1).join(' ').trim() : fullName;
 }
 
-/** ===== select 드롭다운 토글 ===== */
-function toggleSelectDropdown(type){
-  const sel = (type === 'start') ? startSel : endSel;
-
-  // 이미 열려 있으면 닫기
-  if(selectDropdownOpen === type){
-    sel.innerHTML = '<option value="">(캔버스에서 선택 가능)</option>';
-    selectDropdownOpen = null;
-    sel.blur();
-    return;
-  }
-
-  // 다른 쪽 열려 있으면 닫기
-  if(selectDropdownOpen){
-    const other = (selectDropdownOpen === 'start') ? startSel : endSel;
-    other.innerHTML = '<option value="">(캔버스에서 선택 가능)</option>';
-  }
-
-  // 열기 → 전체 노드 표시
-  sel.innerHTML = '';
-  nodeNames.forEach(n => {
-    const opt = document.createElement('option');
-    opt.value = n;
-    opt.textContent = getLabel(n);
-    sel.appendChild(opt);
-  });
-
-  selectDropdownOpen = type;
-}
-
-
 /** ===== UI 바인딩 ===== */
 function bindUI(){
-  startSel.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    toggleSelectDropdown('start');
-  });
-
-  endSel.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    toggleSelectDropdown('end');
-  });
+  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); startSel.blur(); });
+  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); endSel.blur(); });
 
   routeBtn.addEventListener('click', findPath);
   resetBtn.addEventListener('click', ()=> resetAll(false));
@@ -486,22 +441,14 @@ function handleCanvasTap(x,y){
 
   if(selectingMode){
     if(clickedNode){
-      const sel = (selectingMode === 'start') ? startSel : endSel;
-
-      // 선택값 반영
-      sel.innerHTML = '';
+      const sel = (selectingMode==='start') ? startSel : endSel;
+      sel.innerHTML='';
       const opt = document.createElement('option');
-      opt.value = clickedNode;
-      opt.textContent = getLabel(clickedNode);
+      opt.value = clickedNode; opt.textContent = getLabel(clickedNode);
       sel.appendChild(opt);
       sel.value = clickedNode;
-
-      // 🔑 드롭다운 & 선택모드 종료
       selectingMode = null;
-      selectDropdownOpen = null;
-      sel.blur();
-
-      showInfo('선택 완료: ' + getLabel(clickedNode), 1200);
+      showInfo('선택 완료: ' + clickedNode, 1200);
       draw();
       return;
     } else {
