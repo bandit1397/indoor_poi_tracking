@@ -221,7 +221,8 @@ let blinkNode = null;
 let blinkInterval = null;
 let blinkPersistent = false;
 let pathNodes = [];
-let selectingMode = null;  
+let selectingMode = null; 
+let selectPending = null;   // ← ✅ 바로 여기!
 let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
