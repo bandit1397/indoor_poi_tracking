@@ -443,12 +443,20 @@ function handleCanvasTap(x,y){
   if(selectingMode){
     if(clickedNode){
       const sel = (selectingMode==='start') ? startSel : endSel;
-      sel.innerHTML='';
+
+      // 선택된 노드만 option으로 설정
+      sel.innerHTML = '';
       const opt = document.createElement('option');
-      opt.value = clickedNode; opt.textContent = getLabel(clickedNode);
+      opt.value = clickedNode;
+      opt.textContent = getLabel(clickedNode);
       sel.appendChild(opt);
       sel.value = clickedNode;
+
+      // ✅ 선택 확정 처리 (여기가 핵심)
       selectingMode = null;
+      selectPending = null;     // ← 추가
+      sel.blur();               // ← 추가 (이 순간에만 닫힘)
+
       showInfo('선택 완료: ' + clickedNode, 1200);
       draw();
       return;
@@ -459,7 +467,8 @@ function handleCanvasTap(x,y){
   }
 
   if(addingNodeMode){
-    tempX = x; tempY = y;
+    tempX = x;
+    tempY = y;
     openNodeDialog();
     addingNodeMode = false;
     return;
@@ -483,6 +492,7 @@ function handleCanvasTap(x,y){
     lastClickTime = now;
   }
 }
+
 
 /** ===== 유틸 ===== */
 function findNodeAt(x,y){
