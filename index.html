@@ -745,7 +745,7 @@ function draw(opacity=1){
 function refreshSelectOptions(){
   const makeOptions = (sel) => {
     const curr = sel.value;
-    sel.innerHTML = '<option value="">(캔버스에서 선택 가능)</option>';
+    sel.innerHTML = '<option value="" disabled selected>(캔버스에서 선택 가능)</option>';
     nodeNames.forEach(n=>{
       const opt = document.createElement('option');
       opt.value = n; opt.textContent = getLabel(n);
