@@ -74,6 +74,10 @@
     color:#fff;
   }
 
+  #nodeDialog .typeBtn.active {
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.25);
+  }
+
   #nodeDialog .typeBtn:active {
     transform: translateY(1px);
     opacity: 0.9;
@@ -358,8 +362,14 @@ function bindUI(){
   });
 
   document.querySelectorAll('#nodeDialog .typeBtn').forEach(btn =>
-    btn.addEventListener('click',()=>{ selectedType=btn.dataset.type; })
+    btn.addEventListener('click',()=>{
+      selectedType = btn.dataset.type;
+      document.querySelectorAll('#nodeDialog .typeBtn')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    })
   );
+
   document.getElementById('cancelNodeBtn').addEventListener('click', closeNodeDialog);
   document.getElementById('saveNodeBtn').addEventListener('click', saveNode);
 
