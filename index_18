@@ -238,6 +238,7 @@ let selectPending = null;   // ← ✅ 바로 여기!
 let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
+let isSelectOpen = false; // ← 🔑 추가 (select 깜빡임 방지용)
 
 // helper: compatibility flags
 let imageLoaded = false;
@@ -335,6 +336,12 @@ function bindUI(){
     selectingMode = null;
     endSel.blur();
   });
+
+  startSel.addEventListener('focus', () => isSelectOpen = true);
+  startSel.addEventListener('blur',  () => isSelectOpen = false);
+
+  endSel.addEventListener('focus', () => isSelectOpen = true);
+  endSel.addEventListener('blur',  () => isSelectOpen = false);
 
   routeBtn.addEventListener('click', findPath);
   resetBtn.addEventListener('click', ()=> resetAll(false));
@@ -793,7 +800,11 @@ function refreshSelectOptions(){
   makeOptions(startSel);
   makeOptions(endSel);
 }
-setInterval(refreshSelectOptions, 1500);
+  
+setInterval(() => {
+  if (!isSelectOpen) refreshSelectOptions();
+}, 1500);
+
 
 function showNodeJson(fullName){
   const obj = {};
