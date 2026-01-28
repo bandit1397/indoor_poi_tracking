@@ -353,6 +353,7 @@ function bindUI(){
   document.getElementById('searchBtn').addEventListener('click', manualSearch);
 
   canvas.addEventListener('touchstart', (e) => {
+    touchStillDown = true;   // ✅ 추가
     const t = e.changedTouches[0];
     const rect = canvas.getBoundingClientRect();
     const x = t.clientX - rect.left;
@@ -377,6 +378,8 @@ function bindUI(){
   }, { passive: true });
 
   canvas.addEventListener('touchend', (e) => {
+    touchStillDown = false;   // ✅ 추가 (가장 중요)
+    
     if (longPressTimer) {
       clearTimeout(longPressTimer);
       longPressTimer = null;
