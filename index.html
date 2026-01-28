@@ -337,6 +337,12 @@ function bindUI(){
     endSel.blur();
   });
 
+  startSel.addEventListener('focus', () => isSelectOpen = true);
+  startSel.addEventListener('blur',  () => isSelectOpen = false);
+
+  endSel.addEventListener('focus', () => isSelectOpen = true);
+  endSel.addEventListener('blur',  () => isSelectOpen = false);
+
   routeBtn.addEventListener('click', findPath);
   resetBtn.addEventListener('click', ()=> resetAll(false));
   downloadBtn.addEventListener('click', downloadJSON);
