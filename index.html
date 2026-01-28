@@ -356,8 +356,25 @@ function bindUI(){
     const rect = canvas.getBoundingClientRect();
     const x = t.clientX - rect.left;
     const y = t.clientY - rect.top;
-    handleCanvasTap(x,y);
-  }, {passive:true});
+
+    isLongPress = false;
+
+    longPressTimer = setTimeout(() => {
+      const clickedNode = findNodeAt(x, y);
+      if (clickedNode) {
+        isLongPress = true;
+        const inputPwd = prompt("노드 삭제 비밀번호를 입력하세요:");
+        if (inputPwd === password) {
+          deleteNode(clickedNode);
+          showInfo('노드 삭제 완료', 1200, x, y);
+          draw();
+        } else {
+          alert("비밀번호 틀림. 삭제 취소.");
+        }
+      }
+    }, 600); // 👈 길게 누르기 기준 (ms)
+  }, { passive: true });
+
 
   canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
