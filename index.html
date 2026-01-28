@@ -238,6 +238,7 @@ let selectPending = null;   // ← ✅ 바로 여기!
 let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
+let isSelectOpen = false; // ← 🔑 추가 (select 깜빡임 방지용)
 
 // helper: compatibility flags
 let imageLoaded = false;
