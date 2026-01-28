@@ -800,7 +800,11 @@ function refreshSelectOptions(){
   makeOptions(startSel);
   makeOptions(endSel);
 }
-setInterval(refreshSelectOptions, 1500);
+  
+setInterval(() => {
+  if (!isSelectOpen) refreshSelectOptions();
+}, 1500);
+
 
 function showNodeJson(fullName){
   const obj = {};
