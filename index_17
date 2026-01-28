@@ -85,9 +85,21 @@
 
   #nodeDialog label { display:block; margin-top:8px; }
   #searchResults {
-    position:absolute; background:#fff; border:1px solid #e5e7eb; border-radius:8px;
-    display:none; z-index:10; max-height:220px; overflow-y:auto; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 100%;
+    min-width: 0;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    display: none;
+    z-index: 20;
+    max-height: 220px;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   }
+
   #searchResults div { padding:6px 8px; cursor:pointer; }
   #searchResults div:hover { background:#eef; }
 
@@ -221,10 +233,12 @@ let blinkNode = null;
 let blinkInterval = null;
 let blinkPersistent = false;
 let pathNodes = [];
-let selectingMode = null;  
+let selectingMode = null; 
+let selectPending = null;   // ← ✅ 바로 여기!
 let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
+let isSelectOpen = false; // ← 🔑 추가 (select 깜빡임 방지용)
 
 // helper: compatibility flags
 let imageLoaded = false;
@@ -309,8 +323,25 @@ function getLabel(fullName){
 
 /** ===== UI 바인딩 ===== */
 function bindUI(){
-  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); startSel.blur(); });
-  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); endSel.blur(); });
+  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); });
+  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); });
+  startSel.addEventListener('change', ()=>{
+    selectPending = null;
+    selectingMode = null;
+    startSel.blur();
+  });
+
+  endSel.addEventListener('change', ()=>{
+    selectPending = null;
+    selectingMode = null;
+    endSel.blur();
+  });
+
+  startSel.addEventListener('focus', () => isSelectOpen = true);
+  startSel.addEventListener('blur',  () => isSelectOpen = false);
+
+  endSel.addEventListener('focus', () => isSelectOpen = true);
+  endSel.addEventListener('blur',  () => isSelectOpen = false);
 
   routeBtn.addEventListener('click', findPath);
   resetBtn.addEventListener('click', ()=> resetAll(false));
@@ -344,6 +375,7 @@ function bindUI(){
     const query = searchInput.value;
     const results = searchNodes(query);
     searchResults.innerHTML='';
+
     if(results.length>0){
       searchResults.style.display='block';
       results.forEach(r=>{
@@ -360,6 +392,8 @@ function bindUI(){
       searchResults.style.display='none';
     }
   });
+
+
 
   document.querySelectorAll('#nodeDialog .typeBtn').forEach(btn =>
     btn.addEventListener('click',()=>{
@@ -442,12 +476,20 @@ function handleCanvasTap(x,y){
   if(selectingMode){
     if(clickedNode){
       const sel = (selectingMode==='start') ? startSel : endSel;
-      sel.innerHTML='';
+
+      // 선택된 노드만 option으로 설정
+      sel.innerHTML = '';
       const opt = document.createElement('option');
-      opt.value = clickedNode; opt.textContent = getLabel(clickedNode);
+      opt.value = clickedNode;
+      opt.textContent = getLabel(clickedNode);
       sel.appendChild(opt);
       sel.value = clickedNode;
+
+      // ✅ 선택 확정 처리 (여기가 핵심)
       selectingMode = null;
+      selectPending = null;     // ← 추가
+      sel.blur();               // ← 추가 (이 순간에만 닫힘)
+
       showInfo('선택 완료: ' + clickedNode, 1200);
       draw();
       return;
@@ -458,7 +500,8 @@ function handleCanvasTap(x,y){
   }
 
   if(addingNodeMode){
-    tempX = x; tempY = y;
+    tempX = x;
+    tempY = y;
     openNodeDialog();
     addingNodeMode = false;
     return;
@@ -482,6 +525,7 @@ function handleCanvasTap(x,y){
     lastClickTime = now;
   }
 }
+
 
 /** ===== 유틸 ===== */
 function findNodeAt(x,y){
@@ -745,7 +789,7 @@ function draw(opacity=1){
 function refreshSelectOptions(){
   const makeOptions = (sel) => {
     const curr = sel.value;
-    sel.innerHTML = '<option value="">(캔버스에서 선택 가능)</option>';
+    sel.innerHTML = '<option value="" disabled selected>(캔버스에서 선택 가능)</option>';
     nodeNames.forEach(n=>{
       const opt = document.createElement('option');
       opt.value = n; opt.textContent = getLabel(n);
@@ -756,7 +800,11 @@ function refreshSelectOptions(){
   makeOptions(startSel);
   makeOptions(endSel);
 }
-setInterval(refreshSelectOptions, 1500);
+  
+setInterval(() => {
+  if (!isSelectOpen) refreshSelectOptions();
+}, 1500);
+
 
 function showNodeJson(fullName){
   const obj = {};
