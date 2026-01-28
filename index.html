@@ -375,6 +375,25 @@ function bindUI(){
     }, 600); // 👈 길게 누르기 기준 (ms)
   }, { passive: true });
 
+  canvas.addEventListener('touchend', (e) => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+
+    // 길게 누르기가 아니면 → 일반 클릭 처리
+    if (!isLongPress) {
+      const t = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      handleCanvasTap(
+        t.clientX - rect.left,
+        t.clientY - rect.top
+      );
+    }
+
+    isLongPress = false;
+  });
+
 
   canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
