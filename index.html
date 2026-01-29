@@ -353,8 +353,16 @@ function bindUI(){
     const rect = canvas.getBoundingClientRect();
     const x = t.clientX - rect.left;
     const y = t.clientY - rect.top;
-    handleCanvasTap(x,y);
+
+    longPressTriggered = false;
+
+    touchTimer = setTimeout(() => {
+      longPressTriggered = true;
+      handleLongPress(x, y); // 1초 이상 눌렀을 때
+    }, 1000);
+
   }, {passive:true});
+
 
   canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
