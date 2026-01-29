@@ -550,6 +550,20 @@ function handleCanvasTap(x,y){
   }
 }
 
+function handleLongPress(x, y){
+  const clickedNode = findNodeAt(x,y);
+  if(!clickedNode) return;
+
+  const inputPwd = prompt("노드 삭제 비밀번호를 입력하세요:");
+  if(inputPwd === password){
+    deleteNode(clickedNode);
+    showInfo('노드 삭제 완료',1200,x,y);
+    draw();
+  } else {
+    alert("비밀번호 틀림. 삭제 취소.");
+  }
+}
+
 
 /** ===== 유틸 ===== */
 function findNodeAt(x,y){
