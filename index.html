@@ -363,6 +363,19 @@ function bindUI(){
 
   }, {passive:true});
 
+  canvas.addEventListener('touchend', (e) => {
+    if (touchTimer) clearTimeout(touchTimer);
+
+    if (!longPressTriggered) {
+      const t = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = t.clientX - rect.left;
+      const y = t.clientY - rect.top;
+      handleCanvasTap(x, y); // 짧게 터치 = PC 1클릭
+    }
+  }, {passive:true});
+
+
 
   canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
