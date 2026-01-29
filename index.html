@@ -123,41 +123,6 @@
     }
     select, input { min-width: 140px; }
 }
-  /* 📱 휴대폰 가로보기 전용 레이아웃 */
-@media (max-height: 500px) and (orientation: landscape) {
-
-  #controls {
-    width: 100vw;
-    left: 0;
-    transform: none;
-    border-radius: 0;
-    max-width: 100vw;
-  }
-
-  #controls .row {
-    flex-wrap: nowrap;
-    justify-content: space-between;
-  }
-
-  #controls .row > * {
-    flex: 1;
-    min-width: 0;
-    font-size: 12px;
-    padding: 6px;
-  }
-
-  #controls select,
-  #controls input {
-    width: 100%;
-  }
-
-  #controls strong {
-    flex: 0 0 auto;
-    font-size: 12px;
-    padding-right: 4px;
-  }
-}
-
 
 </style>
 </head>
