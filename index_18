@@ -353,10 +353,30 @@ function bindUI(){
     const rect = canvas.getBoundingClientRect();
     const x = t.clientX - rect.left;
     const y = t.clientY - rect.top;
-    handleCanvasTap(x,y);
+
+    longPressTriggered = false;
+
+    touchTimer = setTimeout(() => {
+      longPressTriggered = true;
+      handleLongPress(x, y); // 1초 이상 눌렀을 때
+    }, 1000);
+
+  }, {passive:true});
+
+  canvas.addEventListener('touchend', (e) => {
+    if (touchTimer) clearTimeout(touchTimer);
+
+    if (!longPressTriggered) {
+      const t = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = t.clientX - rect.left;
+      const y = t.clientY - rect.top;
+      handleCanvasTap(x, y); // 짧게 터치 = PC 1클릭
+    }
   }, {passive:true});
 
   canvas.addEventListener('click', (e) => {
+    if (longPressTriggered || touchTimer) return; // ← 🔥 핵심
     const rect = canvas.getBoundingClientRect();
     handleCanvasTap(e.clientX - rect.left, e.clientY - rect.top);
   });
@@ -469,6 +489,9 @@ function getNodeNormalizedCoordsFromCanvas(px,py){
 
 /** ===== 캔버스 탭/클릭 핸들러 ===== */
 let lastClickTime = 0;
+let touchTimer = null;
+let longPressTriggered = false;
+
 function handleCanvasTap(x,y){
   if(!floorImg) return;
   const clickedNode = findNodeAt(x,y);
@@ -523,6 +546,20 @@ function handleCanvasTap(x,y){
       showInfo(`${getLabel(clickedNode)} : ${n.note||'참고사항 없음'}`, 2000, x, y);
     }
     lastClickTime = now;
+  }
+}
+
+function handleLongPress(x, y){
+  const clickedNode = findNodeAt(x,y);
+  if(!clickedNode) return;
+
+  const inputPwd = prompt("노드 삭제 비밀번호를 입력하세요:");
+  if(inputPwd === password){
+    deleteNode(clickedNode);
+    showInfo('노드 삭제 완료',1200,x,y);
+    draw();
+  } else {
+    alert("비밀번호 틀림. 삭제 취소.");
   }
 }
 
