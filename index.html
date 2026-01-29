@@ -373,6 +373,7 @@ function bindUI(){
       const y = t.clientY - rect.top;
       handleCanvasTap(x, y); // 짧게 터치 = PC 1클릭
     }
+    touchTimer = null; // ← 추가
   }, {passive:true});
 
   canvas.addEventListener('click', (e) => {
