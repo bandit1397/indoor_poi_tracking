@@ -469,6 +469,9 @@ function getNodeNormalizedCoordsFromCanvas(px,py){
 
 /** ===== 캔버스 탭/클릭 핸들러 ===== */
 let lastClickTime = 0;
+let touchTimer = null;
+let longPressTriggered = false;
+
 function handleCanvasTap(x,y){
   if(!floorImg) return;
   const clickedNode = findNodeAt(x,y);
