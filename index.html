@@ -375,9 +375,8 @@ function bindUI(){
     }
   }, {passive:true});
 
-
-
   canvas.addEventListener('click', (e) => {
+    if (longPressTriggered || touchTimer) return; // ← 🔥 핵심
     const rect = canvas.getBoundingClientRect();
     handleCanvasTap(e.clientX - rect.left, e.clientY - rect.top);
   });
