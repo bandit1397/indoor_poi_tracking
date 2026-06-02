@@ -474,7 +474,10 @@ function getNodeDisplayCoords(name){
   if(!n) return null;
   const hasNorm = (typeof n.x === 'number' && typeof n.y === 'number' && n.x<=1 && n.y<=1);
   if(hasNorm){
-    return { x: n.x * canvas.width, y: n.y * canvas.height };
+    return {
+            x: mapOffsetX + (n.x * floorImg.width * mapScale),
+            y: mapOffsetY + (n.y * floorImg.height * mapScale)
+           };
   }
   if(imageLoaded && floorImg && floorImg.width && floorImg.height){
     return { x: (n.x / floorImg.width) * canvas.width, y: (n.y / floorImg.height) * canvas.height };
