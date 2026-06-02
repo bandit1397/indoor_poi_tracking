@@ -11,12 +11,20 @@
   canvas { border:1px solid #ccc; display:block; cursor:crosshair; }
   /* Controls */
   #controls {
-    position: fixed; top:10px; left:50%; transform: translateX(-50%);
-    background: rgba(255,255,255,0.95); padding:10px; border-radius:10px; z-index:10;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15); backdrop-filter: saturate(1.2) blur(4px);
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%); /* 중앙 정렬 */
+    background: rgba(255,255,255,0.95);
+    padding: 10px;
+    border-radius: 10px;
+    z-index: 10;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    backdrop-filter: saturate(1.2) blur(4px);
     max-width: calc(100vw - 20px);
     transition: width 220ms ease, height 220ms ease, padding 220ms ease;
-  }
+}
+
   #controls .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; align-items:center; }
   select, button, input { margin:0; padding:8px 10px; border-radius:8px; border:1px solid #ddd; font-size:14px; }
   button { background:#0ea5e9; color:white; border:none; cursor:pointer; }
@@ -35,12 +43,63 @@
     border-radius:12px; z-index:1000; box-shadow:0 12px 30px rgba(0,0,0,0.25); width:min(92vw,420px);
   }
   #nodeDialog h3 { margin:0 0 10px 0; font-size:18px; }
-  #nodeDialog .typeBtn { margin:4px; padding:6px 10px; cursor:pointer; border:1px solid #ddd; border-radius:999px; background:#f8fafc; }
+  /* 🔽 노드 타입 버튼 컬러 & 스타일 (추가) */
+  #nodeDialog .typeBtn {
+    margin:4px;
+    padding:6px 12px;
+    cursor:pointer;
+    border-radius:999px;
+    font-weight:600;
+    border:1px solid transparent;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, opacity 0.1s ease;
+  }
+
+  #nodeDialog .typeBtn[data-type="normal"] {
+    background:#2563eb;
+    color:#fff;
+  }
+
+  #nodeDialog .typeBtn[data-type="elevator"] {
+    background:#16a34a;
+    color:#fff;
+  }
+
+  #nodeDialog .typeBtn[data-type="stairs"] {
+    background:#f59e0b;
+    color:#fff;
+  }
+
+  #nodeDialog .typeBtn[data-type="escalator"] {
+    background:#9333ea;
+    color:#fff;
+  }
+
+  #nodeDialog .typeBtn.active {
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.25);
+  }
+
+  #nodeDialog .typeBtn:active {
+    transform: translateY(1px);
+    opacity: 0.9;
+  }
+
   #nodeDialog label { display:block; margin-top:8px; }
   #searchResults {
-    position:absolute; background:#fff; border:1px solid #e5e7eb; border-radius:8px;
-    display:none; z-index:10; max-height:220px; overflow-y:auto; min-width: 240px; box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 100%;
+    min-width: 0;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    display: none;
+    z-index: 20;
+    max-height: 220px;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
   }
+
   #searchResults div { padding:6px 8px; cursor:pointer; }
   #searchResults div:hover { background:#eef; }
 
@@ -58,11 +117,11 @@
   }
   
   @media (max-width: 640px) {
-  #controls {
-    left:50%;
-    right:auto;
-    transform: translateX(-50%);
-  }
+    #controls {
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    select, input { min-width: 140px; }
 }
 
 </style>
@@ -81,6 +140,7 @@
     <strong>층간 길안내</strong>
     <button id="downloadBtn" class="secondary" title="현재 노드 데이터를 JSON으로 저장">JSON 다운로드</button>
     <button id="resetBtn" class="warn" title="경로 및 상태 초기화">초기화</button>
+    <button id="stopBlinkBtn" class="secondary" title="강조 해제">깜빡임 해제</button>
   </div>
 
   <!-- 3️⃣ 출발지/목적지/길찾기 -->
@@ -171,11 +231,14 @@ let edges = {};
 let nodeNames = [];  
 let blinkNode = null;
 let blinkInterval = null;
+let blinkPersistent = false;
 let pathNodes = [];
-let selectingMode = null;  
+let selectingMode = null; 
+let selectPending = null;   // ← ✅ 바로 여기!
 let addingNodeMode = false;
 let tempX=0, tempY=0, selectedType='normal';
 let password = 'knp123';
+let isSelectOpen = false; // ← 🔑 추가 (select 깜빡임 방지용)
 
 // helper: compatibility flags
 let imageLoaded = false;
@@ -260,8 +323,25 @@ function getLabel(fullName){
 
 /** ===== UI 바인딩 ===== */
 function bindUI(){
-  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); startSel.blur(); });
-  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); endSel.blur(); });
+  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); });
+  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); });
+  startSel.addEventListener('change', ()=>{
+    selectPending = null;
+    selectingMode = null;
+    startSel.blur();
+  });
+
+  endSel.addEventListener('change', ()=>{
+    selectPending = null;
+    selectingMode = null;
+    endSel.blur();
+  });
+
+  startSel.addEventListener('focus', () => isSelectOpen = true);
+  startSel.addEventListener('blur',  () => isSelectOpen = false);
+
+  endSel.addEventListener('focus', () => isSelectOpen = true);
+  endSel.addEventListener('blur',  () => isSelectOpen = false);
 
   routeBtn.addEventListener('click', findPath);
   resetBtn.addEventListener('click', ()=> resetAll(false));
@@ -273,10 +353,30 @@ function bindUI(){
     const rect = canvas.getBoundingClientRect();
     const x = t.clientX - rect.left;
     const y = t.clientY - rect.top;
-    handleCanvasTap(x,y);
+
+    longPressTriggered = false;
+
+    touchTimer = setTimeout(() => {
+      longPressTriggered = true;
+      handleLongPress(x, y); // 1초 이상 눌렀을 때
+    }, 1000);
+
+  }, {passive:true});
+
+  canvas.addEventListener('touchend', (e) => {
+    if (touchTimer) clearTimeout(touchTimer);
+
+    if (!longPressTriggered) {
+      const t = e.changedTouches[0];
+      const rect = canvas.getBoundingClientRect();
+      const x = t.clientX - rect.left;
+      const y = t.clientY - rect.top;
+      handleCanvasTap(x, y); // 짧게 터치 = PC 1클릭
+    }
   }, {passive:true});
 
   canvas.addEventListener('click', (e) => {
+    if (longPressTriggered || touchTimer) return; // ← 🔥 핵심
     const rect = canvas.getBoundingClientRect();
     handleCanvasTap(e.clientX - rect.left, e.clientY - rect.top);
   });
@@ -295,6 +395,7 @@ function bindUI(){
     const query = searchInput.value;
     const results = searchNodes(query);
     searchResults.innerHTML='';
+
     if(results.length>0){
       searchResults.style.display='block';
       results.forEach(r=>{
@@ -312,9 +413,17 @@ function bindUI(){
     }
   });
 
+
+
   document.querySelectorAll('#nodeDialog .typeBtn').forEach(btn =>
-    btn.addEventListener('click',()=>{ selectedType=btn.dataset.type; })
+    btn.addEventListener('click',()=>{
+      selectedType = btn.dataset.type;
+      document.querySelectorAll('#nodeDialog .typeBtn')
+        .forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    })
   );
+
   document.getElementById('cancelNodeBtn').addEventListener('click', closeNodeDialog);
   document.getElementById('saveNodeBtn').addEventListener('click', saveNode);
 
@@ -326,6 +435,8 @@ function bindUI(){
     // update tooltip/title
     toggleBtn.title = isCollapsed ? '컨트롤 펼치기' : '컨트롤 접기';
   });
+
+  document.getElementById('stopBlinkBtn').addEventListener('click', stopBlink);
 
   // close search results when clicking elsewhere
   document.addEventListener('click', (e)=>{
@@ -378,6 +489,9 @@ function getNodeNormalizedCoordsFromCanvas(px,py){
 
 /** ===== 캔버스 탭/클릭 핸들러 ===== */
 let lastClickTime = 0;
+let touchTimer = null;
+let longPressTriggered = false;
+
 function handleCanvasTap(x,y){
   if(!floorImg) return;
   const clickedNode = findNodeAt(x,y);
@@ -385,12 +499,20 @@ function handleCanvasTap(x,y){
   if(selectingMode){
     if(clickedNode){
       const sel = (selectingMode==='start') ? startSel : endSel;
-      sel.innerHTML='';
+
+      // 선택된 노드만 option으로 설정
+      sel.innerHTML = '';
       const opt = document.createElement('option');
-      opt.value = clickedNode; opt.textContent = getLabel(clickedNode);
+      opt.value = clickedNode;
+      opt.textContent = getLabel(clickedNode);
       sel.appendChild(opt);
       sel.value = clickedNode;
+
+      // ✅ 선택 확정 처리 (여기가 핵심)
       selectingMode = null;
+      selectPending = null;     // ← 추가
+      sel.blur();               // ← 추가 (이 순간에만 닫힘)
+
       showInfo('선택 완료: ' + clickedNode, 1200);
       draw();
       return;
@@ -401,7 +523,8 @@ function handleCanvasTap(x,y){
   }
 
   if(addingNodeMode){
-    tempX = x; tempY = y;
+    tempX = x;
+    tempY = y;
     openNodeDialog();
     addingNodeMode = false;
     return;
@@ -425,6 +548,21 @@ function handleCanvasTap(x,y){
     lastClickTime = now;
   }
 }
+
+function handleLongPress(x, y){
+  const clickedNode = findNodeAt(x,y);
+  if(!clickedNode) return;
+
+  const inputPwd = prompt("노드 삭제 비밀번호를 입력하세요:");
+  if(inputPwd === password){
+    deleteNode(clickedNode);
+    showInfo('노드 삭제 완료',1200,x,y);
+    draw();
+  } else {
+    alert("비밀번호 틀림. 삭제 취소.");
+  }
+}
+
 
 /** ===== 유틸 ===== */
 function findNodeAt(x,y){
@@ -522,18 +660,29 @@ function highlightNode(name=null){
 
   if(blinkInterval) clearInterval(blinkInterval);
   blinkNode = nodeToBlink;
+  blinkPersistent = true; // 이제 계속 깜빡임
 
   let opacity = 0.2;
   let growing = true;
 
-  blinkInterval=setInterval(()=>{
+  blinkInterval = setInterval(()=>{
     if(growing){ opacity += 0.1; if(opacity >= 0.85) growing = false; } 
     else { opacity -= 0.1; if(opacity <= 0.2) growing = true; }
     draw(opacity);
-  },100);
-
-  setTimeout(()=>{ clearInterval(blinkInterval); blinkInterval=null; blinkNode=null; draw(); },3000);
+  }, 100);
 }
+
+function stopBlink(){
+  if(blinkInterval){
+    clearInterval(blinkInterval);
+    blinkInterval = null;
+  }
+  blinkNode = null;
+  blinkPersistent = false;
+  draw();
+}
+
+
 
 /** ===== 초기화 ===== */
 function resetAll(skipConfirm=false){
@@ -625,122 +774,59 @@ function downloadJSON(){
 }
 
 /** ===== 그리기 ===== */
-function draw(opacity = 1) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+function draw(opacity=1){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // ===============================
-  // 1️⃣ 지도 이미지 비율 유지 렌더링 (contain)
-  // ===============================
-  let mapOffsetX = 0;
-  let mapOffsetY = 0;
-  let mapDrawWidth = canvas.width;
-  let mapDrawHeight = canvas.height;
-  let scaleX = 1;
-  let scaleY = 1;
-
-  if (floorImg) {
-    const imgRatio = floorImg.width / floorImg.height;
-    const canvasRatio = canvas.width / canvas.height;
-
-    if (canvasRatio > imgRatio) {
-      // 캔버스가 더 넓음 → 높이에 맞춤
-      mapDrawHeight = canvas.height;
-      mapDrawWidth = mapDrawHeight * imgRatio;
-      mapOffsetX = (canvas.width - mapDrawWidth) / 2;
-      mapOffsetY = 0;
-    } else {
-      // 캔버스가 더 높음 → 너비에 맞춤
-      mapDrawWidth = canvas.width;
-      mapDrawHeight = mapDrawWidth / imgRatio;
-      mapOffsetX = 0;
-      mapOffsetY = (canvas.height - mapDrawHeight) / 2;
-    }
-
-    scaleX = mapDrawWidth / canvas.width;
-    scaleY = mapDrawHeight / canvas.height;
-
-    ctx.drawImage(
-      floorImg,
-      mapOffsetX,
-      mapOffsetY,
-      mapDrawWidth,
-      mapDrawHeight
-    );
+  if(floorImg){
+    ctx.drawImage(floorImg,0,0,canvas.width,canvas.height);
   }
 
-  // ===============================
-  // 2️⃣ 경로 그리기 (지도 기준 좌표 보정)
-  // ===============================
-  if (pathNodes.length > 1) {
-    ctx.strokeStyle = 'red';
-    ctx.lineWidth = 4;
-    ctx.lineJoin = 'round';
+  // 경로
+  if(pathNodes.length>1){
+    ctx.strokeStyle='red'; ctx.lineWidth=4; ctx.lineJoin='round';
     ctx.beginPath();
-
-    pathNodes.forEach((n, i) => {
+    pathNodes.forEach((n,i)=>{
       const d = getNodeDisplayCoords(n);
-      if (!d) return;
-
-      const x = mapOffsetX + d.x * scaleX;
-      const y = mapOffsetY + d.y * scaleY;
-
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      if(!d) return;
+      if(i===0) ctx.moveTo(d.x,d.y);
+      else ctx.lineTo(d.x,d.y);
     });
-
     ctx.stroke();
   }
 
-  // ===============================
-  // 3️⃣ 노드 + 라벨 그리기 (지도 기준 좌표 보정)
-  // ===============================
+  // 노드
   ctx.font = '12px system-ui';
   ctx.textBaseline = 'middle';
-
-  nodeNames.forEach(n => {
-    const node = nodes[n];
-    if (!node) return;
-
+  nodeNames.forEach(n=>{
+    const node=nodes[n]; if(!node) return;
     const d = getNodeDisplayCoords(n);
-    if (!d) return;
-
-    const x = mapOffsetX + d.x * scaleX;
-    const y = mapOffsetY + d.y * scaleY;
-
+    if(!d) return;
     let radius = 9;
-    if (n === blinkNode) radius = 14;
-
+    if(n===blinkNode) radius = 9 * 2; // 18px
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-
-    if (n === blinkNode) {
-      ctx.fillStyle = `rgba(255,255,0,${opacity})`;
-    } else if (pathNodes.includes(n)) {
-      ctx.fillStyle = 'red';
-    } else {
-      ctx.fillStyle =
-        node.type === 'normal' ? '#2563eb' :
-        node.type === 'stairs' ? '#f59e0b' :
-        node.type === 'elevator' ? '#16a34a' :
-        '#9333ea';
+    ctx.arc(d.x,d.y,radius,0,Math.PI*2);
+    if(n===blinkNode){ ctx.fillStyle=`rgba(255,0,0,${opacity})`; }
+    else if(pathNodes.includes(n)){ ctx.fillStyle='red'; }
+    else {
+      ctx.fillStyle = (node.type==='normal') ? '#2563eb'
+                    : (node.type==='stairs') ? '#f59e0b'
+                    : (node.type==='elevator') ? '#16a34a'
+                    : '#9333ea';
     }
-
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    ctx.stroke();
+    ctx.strokeStyle='rgba(0,0,0,0.6)'; ctx.stroke();
 
     // 라벨
-    ctx.fillStyle = 'black';
-    ctx.fillText(getLabel(n), x + radius + 6, y);
+    ctx.fillStyle='black';
+    ctx.fillText(getLabel(n), d.x + radius + 6, d.y);
   });
 }
-
 
 /** ===== 접근성 보완: 셀렉트 직접 선택 지원(옵션 목록 채우기) ===== */
 function refreshSelectOptions(){
   const makeOptions = (sel) => {
     const curr = sel.value;
-    sel.innerHTML = '<option value="">(캔버스에서 선택 가능)</option>';
+    sel.innerHTML = '<option value="" disabled selected>(캔버스에서 선택 가능)</option>';
     nodeNames.forEach(n=>{
       const opt = document.createElement('option');
       opt.value = n; opt.textContent = getLabel(n);
@@ -751,7 +837,11 @@ function refreshSelectOptions(){
   makeOptions(startSel);
   makeOptions(endSel);
 }
-setInterval(refreshSelectOptions, 1500);
+  
+setInterval(() => {
+  if (!isSelectOpen) refreshSelectOptions();
+}, 1500);
+
 
 function showNodeJson(fullName){
   const obj = {};
