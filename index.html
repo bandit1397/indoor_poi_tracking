@@ -776,6 +776,39 @@ function downloadJSON(){
   showInfo('locations.json 다운로드 완료', 1400);
 }
 
+let mapScale = 1;
+let mapOffsetX = 0;
+let mapOffsetY = 0;
+
+function drawFloorImage(){
+
+  const imgRatio = floorImg.width / floorImg.height;
+  const canvasRatio = canvas.width / canvas.height;
+
+  let drawW, drawH;
+
+  if(canvasRatio > imgRatio){
+    drawH = canvas.height;
+    drawW = drawH * imgRatio;
+  }else{
+    drawW = canvas.width;
+    drawH = drawW / imgRatio;
+  }
+
+  mapOffsetX = (canvas.width - drawW) / 2;
+  mapOffsetY = (canvas.height - drawH) / 2;
+
+  mapScale = drawW / floorImg.width;
+
+  ctx.drawImage(
+    floorImg,
+    mapOffsetX,
+    mapOffsetY,
+    drawW,
+    drawH
+  );
+}
+
 /** ===== 그리기 ===== */
 function draw(opacity=1){
   ctx.clearRect(0,0,canvas.width,canvas.height);
