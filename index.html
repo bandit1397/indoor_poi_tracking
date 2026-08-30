@@ -116,6 +116,29 @@
    display: none;
   }
   
+  /* 출발지/목적지 커스텀 피커 */
+  .picker { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+  .pickerLabel { font-size: 14px; color: #0f172a; }
+  .pickerField {
+    background: #fff; color: #0f172a; border: 1px solid #cbd5e1;
+    text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 110px; max-width: 150px;
+  }
+  .pickerField.has-value { border-color: #0ea5e9; font-weight: 600; }
+  .pickerArrow {
+    background: #64748b; color: #fff; border: none;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12px;
+  }
+  .pickerList {
+    position: absolute; top: calc(100% + 4px); left: 0;
+    min-width: 180px; max-width: 240px; max-height: 40vh; overflow-y: auto;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18); display: none; z-index: 30;
+  }
+  .pickerList div { padding: 8px 10px; cursor: pointer; font-size: 14px; }
+  .pickerList div:hover { background: #eef; }
+  .pickerList .empty { color: #64748b; cursor: default; }
+
   @media (max-width: 640px) {
     #controls {
         left: 50%;
@@ -128,7 +151,7 @@
 </head>
 <body>
 
-<div id="controls" role="region" aria-label="길안내 컨트롤">
+<div id="controls" class="collapsed" role="region" aria-label="길안내 컨트롤">
 
   <!-- 1️⃣ ☰ 버튼 전용 row -->
   <div class="row toggleRow">
@@ -145,8 +168,23 @@
 
   <!-- 3️⃣ 출발지/목적지/길찾기 -->
   <div class="row">
-    출발지: <select id="start" title="출발지 선택(캔버스에서 노드를 클릭해도 됩니다)"></select>
-    목적지: <select id="end" title="목적지 선택(캔버스에서 노드를 클릭해도 됩니다)"></select>
+    <select id="start" hidden></select>
+    <select id="end" hidden></select>
+
+    <span class="picker">
+      <span class="pickerLabel">출발지</span>
+      <button type="button" id="startBtn" class="pickerField" title="누르면 지도에서 직접 선택">지도에서 선택</button>
+      <button type="button" id="startArrow" class="pickerArrow" aria-haspopup="listbox" aria-label="출발지 전체 목록">▼</button>
+      <div id="startList" class="pickerList" role="listbox" aria-label="출발지 목록"></div>
+    </span>
+
+    <span class="picker">
+      <span class="pickerLabel">목적지</span>
+      <button type="button" id="endBtn" class="pickerField" title="누르면 지도에서 직접 선택">지도에서 선택</button>
+      <button type="button" id="endArrow" class="pickerArrow" aria-haspopup="listbox" aria-label="목적지 전체 목록">▼</button>
+      <div id="endList" class="pickerList" role="listbox" aria-label="목적지 목록"></div>
+    </span>
+
     <button id="routeBtn" title="최단 경로 찾기">길찾기</button>
   </div>
 
@@ -217,6 +255,12 @@ const searchInput = document.getElementById('searchInput');
 const infoBox = document.getElementById('infoBox');
 const startSel = document.getElementById('start');
 const endSel = document.getElementById('end');
+const startBtn = document.getElementById('startBtn');
+const endBtn = document.getElementById('endBtn');
+const startArrow = document.getElementById('startArrow');
+const endArrow = document.getElementById('endArrow');
+const startList = document.getElementById('startList');
+const endList = document.getElementById('endList');
 const addNodeBtn = document.getElementById('addNodeBtn');
 const searchResults = document.getElementById('searchResults');
 const routeBtn = document.getElementById('routeBtn');
@@ -245,20 +289,26 @@ let imageLoaded = false;
 
 /** ===== 반응형 캔버스 ===== */
 function resizeCanvas(){
-  const vh = Math.max(window.innerHeight, document.documentElement.clientHeight || 0);
-  const vw = Math.max(window.innerWidth, document.documentElement.clientWidth || 0);
-  canvas.width = vw;
-  canvas.height = vh;
+  const vv = window.visualViewport;
+  const vw = Math.round(vv ? vv.width  : (window.innerWidth  || document.documentElement.clientWidth  || 0));
+  const vh = Math.round(vv ? vv.height : (window.innerHeight || document.documentElement.clientHeight || 0));
+  if(vw <= 0 || vh <= 0) return;
+  if(canvas.width !== vw)  canvas.width  = vw;
+  if(canvas.height !== vh) canvas.height = vh;
   draw();
 }
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 300));
+window.addEventListener('load', () => { resizeCanvas(); setTimeout(resizeCanvas, 200); });
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', resizeCanvas);
+}
 
 /** ===== 이미지/JSON 자동 로드 ===== */
 function loadFloorImage(){
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => { floorImg = img; imageLoaded = true; resolve(); };
+    img.onload = () => { floorImg = img; imageLoaded = true; resizeCanvas(); resolve(); };
     img.onerror = reject;
     img.src = 'floorplan.png'; // 같은 폴더에 배치
   });
@@ -305,12 +355,16 @@ function loadLocations(){
 
 /** ===== 초기화 시퀀스 ===== */
 (async function init(){
+  // ☰ 버튼만 보이도록 초기 상태에서 collapsed 적용 (로드 대기 전에 즉시)
+  controls.classList.add('collapsed');
   await Promise.allSettled([loadFloorImage(), loadLocations()]);
   bindUI();
   resizeCanvas();
   draw();
-  // ☰ 버튼만 보이도록 초기 상태에서 collapsed 적용
-  controls.classList.add('collapsed');
+  // 모바일 세로화면 최초 로딩 시 뷰포트 확정 후 재계산
+  requestAnimationFrame(resizeCanvas);
+  setTimeout(resizeCanvas, 150);
+  setTimeout(resizeCanvas, 500);
 })();
 
 /** ===== 라벨 도우미 ===== */
@@ -323,25 +377,12 @@ function getLabel(fullName){
 
 /** ===== UI 바인딩 ===== */
 function bindUI(){
-  startSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('start'); });
-  endSel.addEventListener('click',(e)=>{ e.preventDefault(); e.stopPropagation(); enterSelectingMode('end'); });
-  startSel.addEventListener('change', ()=>{
-    selectPending = null;
-    selectingMode = null;
-    startSel.blur();
-  });
-
-  endSel.addEventListener('change', ()=>{
-    selectPending = null;
-    selectingMode = null;
-    endSel.blur();
-  });
-
-  startSel.addEventListener('focus', () => isSelectOpen = true);
-  startSel.addEventListener('blur',  () => isSelectOpen = false);
-
-  endSel.addEventListener('focus', () => isSelectOpen = true);
-  endSel.addEventListener('blur',  () => isSelectOpen = false);
+  // 출발지/목적지 칸 클릭 → 목록을 열지 않고, 지도에서 직접 클릭하도록 안내만
+  startBtn.addEventListener('click',(e)=>{ e.stopPropagation(); closeLists(); enterSelectingMode('start'); });
+  endBtn.addEventListener('click',(e)=>{ e.stopPropagation(); closeLists(); enterSelectingMode('end'); });
+  // 화살표(▼) 클릭 → 등록된 전체 위치 목록을 드롭다운으로 표시
+  startArrow.addEventListener('click',(e)=>{ e.stopPropagation(); toggleList('start'); });
+  endArrow.addEventListener('click',(e)=>{ e.stopPropagation(); toggleList('end'); });
 
   routeBtn.addEventListener('click', findPath);
   resetBtn.addEventListener('click', ()=> resetAll(false));
@@ -441,7 +482,60 @@ function bindUI(){
   // close search results when clicking elsewhere
   document.addEventListener('click', (e)=>{
     if(!controls.contains(e.target)) searchResults.style.display='none';
+    if(!(e.target.closest && e.target.closest('.picker'))) closeLists();
   });
+}
+
+/** ===== 출발지/목적지 커스텀 피커 ===== */
+function closeLists(){
+  startList.style.display = 'none';
+  endList.style.display = 'none';
+}
+
+function toggleList(mode){
+  const list = (mode==='start') ? startList : endList;
+  const willOpen = list.style.display !== 'block';
+  closeLists();
+  if(!willOpen) return;
+
+  list.innerHTML = '';
+  if(nodeNames.length === 0){
+    const d = document.createElement('div');
+    d.className = 'empty';
+    d.textContent = '등록된 위치가 없습니다';
+    list.appendChild(d);
+  } else {
+    nodeNames.forEach(n=>{
+      const d = document.createElement('div');
+      d.setAttribute('role','option');
+      d.textContent = getLabel(n);
+      d.title = n;
+      d.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        setEndpoint(mode, n);
+        closeLists();
+        showInfo((mode==='start'?'출발지':'목적지') + ' 선택: ' + getLabel(n), 1200);
+        draw();
+      });
+      list.appendChild(d);
+    });
+  }
+  list.style.display = 'block';
+}
+
+function setEndpoint(mode, fullName){
+  const sel = (mode==='start') ? startSel : endSel;
+  const btn = (mode==='start') ? startBtn : endBtn;
+  sel.innerHTML = '';
+  const opt = document.createElement('option');
+  opt.value = fullName;
+  opt.textContent = getLabel(fullName);
+  sel.appendChild(opt);
+  sel.value = fullName;
+  btn.textContent = getLabel(fullName);
+  btn.classList.add('has-value');
+  selectingMode = null;
+  selectPending = null;
 }
 
 /** ===== 정보 토스트 ===== */
@@ -465,7 +559,8 @@ function showInfo(text, ms=2000, x=null, y=null){
 /** ===== 선택 모드 ===== */
 function enterSelectingMode(mode){
   selectingMode = mode;
-  showInfo((mode==='start'?'출발':'목적지')+' 노드를 캔버스에서 선택하세요.', 1800);
+  closeLists();
+  showInfo('지도에서 ' + (mode==='start'?'출발지':'목적지') + ' 위치를 직접 클릭하세요.', 2500);
 }
 
 /** ===== 좌표 변환 유틸 ===== */
@@ -501,26 +596,13 @@ function handleCanvasTap(x,y){
 
   if(selectingMode){
     if(clickedNode){
-      const sel = (selectingMode==='start') ? startSel : endSel;
-
-      // 선택된 노드만 option으로 설정
-      sel.innerHTML = '';
-      const opt = document.createElement('option');
-      opt.value = clickedNode;
-      opt.textContent = getLabel(clickedNode);
-      sel.appendChild(opt);
-      sel.value = clickedNode;
-
-      // ✅ 선택 확정 처리 (여기가 핵심)
-      selectingMode = null;
-      selectPending = null;     // ← 추가
-      sel.blur();               // ← 추가 (이 순간에만 닫힘)
-
-      showInfo('선택 완료: ' + clickedNode, 1200);
+      const mode = selectingMode;
+      setEndpoint(mode, clickedNode);
+      showInfo((mode==='start'?'출발지':'목적지') + ' 선택 완료: ' + getLabel(clickedNode), 1200);
       draw();
       return;
     } else {
-      showInfo('노드를 클릭하여 선택하세요.', 1200);
+      showInfo('위치 점을 정확히 클릭하세요.', 1200);
       return;
     }
   }
@@ -698,6 +780,9 @@ function resetAll(skipConfirm=false){
   if(infoTimeout){ clearTimeout(infoTimeout); infoTimeout=null; }
   infoBox.style.display='none';
   startSel.innerHTML=''; endSel.innerHTML='';
+  startBtn.textContent = '지도에서 선택'; endBtn.textContent = '지도에서 선택';
+  startBtn.classList.remove('has-value'); endBtn.classList.remove('has-value');
+  closeLists();
   searchResults.style.display='none';
   draw();
 }
@@ -857,27 +942,6 @@ function draw(opacity=1){
     ctx.fillText(getLabel(n), d.x + radius + 6, d.y);
   });
 }
-
-/** ===== 접근성 보완: 셀렉트 직접 선택 지원(옵션 목록 채우기) ===== */
-function refreshSelectOptions(){
-  const makeOptions = (sel) => {
-    const curr = sel.value;
-    sel.innerHTML = '<option value="" disabled selected>(캔버스에서 선택 가능)</option>';
-    nodeNames.forEach(n=>{
-      const opt = document.createElement('option');
-      opt.value = n; opt.textContent = getLabel(n);
-      sel.appendChild(opt);
-    });
-    if(curr && nodeNames.includes(curr)) sel.value = curr;
-  };
-  makeOptions(startSel);
-  makeOptions(endSel);
-}
-  
-setInterval(() => {
-  if (!isSelectOpen) refreshSelectOptions();
-}, 1500);
-
 
 function showNodeJson(fullName){
   const obj = {};
