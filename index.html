@@ -115,7 +115,27 @@
   #controls.collapsed .row:not(.toggleRow) {
    display: none;
   }
-  
+
+  /* 패널 이동 / 크기 조절 핸들 */
+  #moveControlsBtn {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:40px; height:40px; padding:0; font-size:18px;
+    background:transparent; color:#0f172a; border:1px solid transparent;
+    border-radius:8px; cursor:move; touch-action:none;
+  }
+  #moveControlsBtn:active { transform:none; }
+  #controls.collapsed #moveControlsBtn { display:none; }
+  #resizeControlsHandle {
+    position:absolute; right:2px; bottom:2px; width:20px; height:20px;
+    cursor:nwse-resize; touch-action:none; border-radius:0 0 9px 0;
+    background:linear-gradient(135deg,
+      transparent 0 40%, #94a3b8 40% 50%,
+      transparent 50% 62%, #94a3b8 62% 72%, transparent 72%);
+  }
+  #controls.collapsed #resizeControlsHandle { display:none; }
+  #controls.user-sized { overflow:auto; }
+  #controls.dragging { transition:none; user-select:none; -webkit-user-select:none; }
+
   /* 출발지/목적지 커스텀 피커 */
   .picker { position: relative; display: inline-flex; align-items: center; gap: 4px; }
   .pickerLabel { font-size: 14px; color: #0f172a; }
@@ -156,6 +176,7 @@
   <!-- 1️⃣ ☰ 버튼 전용 row -->
   <div class="row toggleRow">
     <button id="toggleControlsBtn" aria-expanded="true" title="컨트롤 접기/펼치기">☰</button>
+    <button id="moveControlsBtn" type="button" title="패널 이동(끌기)" aria-label="패널 위치 이동">✥</button>
   </div>
 
   <!-- 2️⃣ 층간 길안내 + 다운로드/초기화 버튼 -->
@@ -196,6 +217,7 @@
     <div id="searchResults" role="listbox" aria-label="검색 결과"></div>
   </div>
 
+  <div id="resizeControlsHandle" title="패널 크기 조절(끌기)" aria-label="패널 크기 조절"></div>
 </div>
 
 <div id="infoBox"></div>
@@ -481,7 +503,12 @@ function bindUI(){
     toggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
     // update tooltip/title
     toggleBtn.title = isCollapsed ? '컨트롤 펼치기' : '컨트롤 접기';
+    // 접힐 때는 사용자가 조절한 크기를 잠시 해제, 펼칠 때 다시 적용
+    if(isCollapsed){ controls.style.width=''; controls.style.height=''; }
+    else { applyControlsSize(); }
   });
+
+  initControlsBox();
 
   document.getElementById('stopBlinkBtn').addEventListener('click', stopBlink);
 
@@ -489,6 +516,108 @@ function bindUI(){
   document.addEventListener('click', (e)=>{
     if(!controls.contains(e.target)) searchResults.style.display='none';
     if(!(e.target.closest && e.target.closest('.picker'))) closeLists();
+  });
+}
+
+/** ===== 패널 이동 / 크기 조절 ===== */
+const controlsUserSize = { w:0, h:0 };
+const CONTROLS_LS_KEY = 'controlsBox';
+
+function clampControlsPos(left, top){
+  const margin = 40; // 최소 이만큼은 화면 안에 남김
+  left = Math.min(Math.max(0, left), Math.max(0, window.innerWidth  - margin));
+  top  = Math.min(Math.max(0, top),  Math.max(0, window.innerHeight - margin));
+  return { left, top };
+}
+
+function setControlsPos(left, top){
+  const c = clampControlsPos(left, top);
+  controls.style.left = c.left + 'px';
+  controls.style.top  = c.top  + 'px';
+  controls.style.right = 'auto';
+  controls.style.transform = 'none';
+}
+
+function applyControlsSize(){
+  if(controls.classList.contains('collapsed')) return;
+  if(controlsUserSize.w || controlsUserSize.h){
+    controls.classList.add('user-sized');
+    if(controlsUserSize.w) controls.style.width  = controlsUserSize.w + 'px';
+    if(controlsUserSize.h) controls.style.height = controlsUserSize.h + 'px';
+  }
+}
+
+function persistControlsBox(){
+  try{
+    const r = controls.getBoundingClientRect();
+    localStorage.setItem(CONTROLS_LS_KEY, JSON.stringify({
+      left: Math.round(r.left), top: Math.round(r.top),
+      w: Math.round(controlsUserSize.w), h: Math.round(controlsUserSize.h)
+    }));
+  }catch(e){}
+}
+
+function initControlsBox(){
+  const moveHandle = document.getElementById('moveControlsBtn');
+  const resizeHandle = document.getElementById('resizeControlsHandle');
+  let mode = null, sx = 0, sy = 0, sLeft = 0, sTop = 0, sW = 0, sH = 0;
+
+  function down(e, m){
+    e.preventDefault(); e.stopPropagation();
+    mode = m;
+    const el = (m === 'move') ? moveHandle : resizeHandle;
+    try{ el.setPointerCapture(e.pointerId); }catch(_){}
+    sx = e.clientX; sy = e.clientY;
+    const r = controls.getBoundingClientRect();
+    sLeft = r.left; sTop = r.top; sW = r.width; sH = r.height;
+    controls.classList.add('dragging');
+  }
+  function move(e){
+    if(!mode) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if(mode === 'move'){
+      setControlsPos(sLeft + dx, sTop + dy);
+    } else {
+      controlsUserSize.w = Math.max(180, Math.round(sW + dx));
+      controlsUserSize.h = Math.max(90,  Math.round(sH + dy));
+      controls.classList.add('user-sized');
+      controls.style.width  = controlsUserSize.w + 'px';
+      controls.style.height = controlsUserSize.h + 'px';
+    }
+  }
+  function up(){
+    if(!mode) return;
+    mode = null;
+    controls.classList.remove('dragging');
+    persistControlsBox();
+  }
+
+  moveHandle.addEventListener('pointerdown', (e)=> down(e, 'move'));
+  moveHandle.addEventListener('pointermove', move);
+  moveHandle.addEventListener('pointerup', up);
+  moveHandle.addEventListener('pointercancel', up);
+  resizeHandle.addEventListener('pointerdown', (e)=> down(e, 'resize'));
+  resizeHandle.addEventListener('pointermove', move);
+  resizeHandle.addEventListener('pointerup', up);
+  resizeHandle.addEventListener('pointercancel', up);
+
+  // 저장된 위치/크기 복원
+  try{
+    const s = JSON.parse(localStorage.getItem(CONTROLS_LS_KEY) || 'null');
+    if(s){
+      if(typeof s.w === 'number') controlsUserSize.w = s.w;
+      if(typeof s.h === 'number') controlsUserSize.h = s.h;
+      if(typeof s.left === 'number' && typeof s.top === 'number') setControlsPos(s.left, s.top);
+      applyControlsSize();
+    }
+  }catch(e){}
+
+  // 화면 회전/리사이즈 시 패널이 화면 밖으로 나가지 않도록 다시 클램프
+  window.addEventListener('resize', ()=>{
+    if(controls.style.left){
+      const r = controls.getBoundingClientRect();
+      setControlsPos(r.left, r.top);
+    }
   });
 }
 
