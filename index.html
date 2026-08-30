@@ -289,9 +289,11 @@ let imageLoaded = false;
 
 /** ===== 반응형 캔버스 ===== */
 function resizeCanvas(){
-  const vv = window.visualViewport;
-  const vw = Math.round(vv ? vv.width  : (window.innerWidth  || document.documentElement.clientWidth  || 0));
-  const vh = Math.round(vv ? vv.height : (window.innerHeight || document.documentElement.clientHeight || 0));
+  // ⚠️ 레이아웃 뷰포트(window.innerWidth/Height) 기준으로만 크기를 잡는다.
+  // 핀치 줌 시 visualViewport 크기는 줄어들지만 layout 뷰포트는 고정 → 캔버스 크기 고정 →
+  // 브라우저가 캔버스(맵+위치점+글자)와 패널을 하나로 균일 확대/축소한다(왜곡 없음).
+  const vw = Math.round(window.innerWidth  || document.documentElement.clientWidth  || 0);
+  const vh = Math.round(window.innerHeight || document.documentElement.clientHeight || 0);
   if(vw <= 0 || vh <= 0) return;
   if(canvas.width !== vw)  canvas.width  = vw;
   if(canvas.height !== vh) canvas.height = vh;
@@ -301,7 +303,11 @@ window.addEventListener('resize', resizeCanvas);
 window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 300));
 window.addEventListener('load', () => { resizeCanvas(); setTimeout(resizeCanvas, 200); });
 if(window.visualViewport){
-  window.visualViewport.addEventListener('resize', resizeCanvas);
+  // 주소창 노출/숨김 등으로 보이는 영역이 바뀔 때만 재계산.
+  // 핀치 줌(scale ≠ 1) 중에는 손대지 않아야 전체가 왜곡 없이 함께 확대된다.
+  window.visualViewport.addEventListener('resize', () => {
+    if(Math.abs(window.visualViewport.scale - 1) < 0.01) resizeCanvas();
+  });
 }
 
 /** ===== 이미지/JSON 자동 로드 ===== */
